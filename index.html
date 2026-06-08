@@ -14,6 +14,13 @@
     <header id="app-header">
       <h1>Bible Companion</h1>
       <div class="header-controls">
+        <button id="logout-btn" class="icon-btn" aria-label="Logout" title="Logout">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
         <button id="settings-btn" class="icon-btn" aria-label="Settings" title="Settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
@@ -89,6 +96,47 @@
         <div class="form-actions">
           <button type="button" id="reset-settings" class="btn-secondary">Reset Defaults</button>
           <button type="submit" class="btn-primary">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="login-modal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="login-title">Bible Companion</h2>
+      </div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-username">Username</label>
+          <input type="text" id="login-username" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" required autocomplete="current-password">
+        </div>
+        <div id="login-error" class="status-message"></div>
+        <div class="form-actions">
+          <button type="button" id="show-register" class="btn-secondary">Create Account</button>
+          <button type="submit" class="btn-primary">Login</button>
+        </div>
+      </form>
+
+      <form id="register-form" style="display:none">
+        <div class="form-group">
+          <label for="register-username">Username</label>
+          <input type="text" id="register-username" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="register-password">Password</label>
+          <input type="password" id="register-password" required autocomplete="new-password">
+        </div>
+        <div id="register-error" class="status-message"></div>
+        <div class="form-actions">
+          <button type="button" id="show-login" class="btn-secondary">Back to Login</button>
+          <button type="submit" class="btn-primary">Register</button>
         </div>
       </form>
     </div>

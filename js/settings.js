@@ -1,6 +1,7 @@
-// Settings modal and localStorage persistence
+// Settings modal and SQLite persistence
 
-const STORAGE_KEY = "bibleCompanion_settings";
+import { saveUserSettings } from "./sqlite.js";
+import { getPassword } from "./auth.js";
 
 const DEFAULT_SETTINGS = {
   endpoint: "https://api.openai.com/v1/chat/completions",
@@ -8,30 +9,25 @@ const DEFAULT_SETTINGS = {
   model: "gpt-4o"
 };
 
-let settings = loadSettings();
+let settings = { ...DEFAULT_SETTINGS };
 
-function loadSettings() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
-    }
-  } catch (err) {
-    console.warn("Failed to load settings:", err);
-  }
-  return { ...DEFAULT_SETTINGS };
-}
+window.settings = null;
 
-function saveSettingsToStorage() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch (err) {
-    console.warn("Failed to save settings:", err);
-  }
-}
+window.loadSettings = function(s) {
+  settings = s || { ...DEFAULT_SETTINGS };
+  window.settings = settings;
+};
 
 export function getSettings() {
   return { ...settings };
+}
+
+export function setApiKey(key) {
+  settings.apiKey = key;
+}
+
+export function clearApiKey() {
+  settings.apiKey = "";
 }
 
 function initSettingsModal() {
@@ -49,10 +45,18 @@ function initSettingsModal() {
 
   function openModal() {
     endpointInput.value = settings.endpoint;
-    apiKeyInput.value = settings.apiKey;
     modelInput.value = settings.model;
     statusEl.className = "status-message";
     statusEl.textContent = "";
+
+    if (settings.apiKey) {
+      apiKeyInput.value = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
+      apiKeyInput.dataset.hasKey = "true";
+    } else {
+      apiKeyInput.value = "";
+      apiKeyInput.dataset.hasKey = "false";
+    }
+
     modal.classList.add("active");
     endpointInput.focus();
   }
@@ -66,14 +70,14 @@ function initSettingsModal() {
     statusEl.className = `status-message ${type}`;
   }
 
-  async function validateConnection(endpoint) {
+  async function validateConnection(endpoint, apiKey) {
     try {
       const opts = {
         method: "HEAD",
         headers: {}
       };
-      if (settings.apiKey) {
-        opts.headers["Authorization"] = `Bearer ${settings.apiKey}`;
+      if (apiKey) {
+        opts.headers["Authorization"] = `Bearer ${apiKey}`;
       }
       const res = await fetch(endpoint, opts);
       return res.status < 500;
@@ -90,11 +94,18 @@ function initSettingsModal() {
     if (e.key === "Escape") closeModal();
   });
 
-  resetBtn.addEventListener("click", () => {
+  resetBtn.addEventListener("click", async () => {
     settings = { ...DEFAULT_SETTINGS };
-    saveSettingsToStorage();
+    const password = getPassword();
+    if (password) {
+      const user = JSON.parse(sessionStorage.getItem("bibleCompanion_user"));
+      if (user) {
+        await saveUserSettings(user.id, settings, password);
+      }
+    }
     endpointInput.value = settings.endpoint;
-    apiKeyInput.value = settings.apiKey;
+    apiKeyInput.value = "";
+    apiKeyInput.dataset.hasKey = "false";
     modelInput.value = settings.model;
     setStatus("Settings reset to defaults.", "success");
   });
@@ -103,8 +114,11 @@ function initSettingsModal() {
     e.preventDefault();
 
     const newEndpoint = endpointInput.value.trim();
-    const newApiKey = apiKeyInput.value;
+    const rawApiKey = apiKeyInput.value;
     const newModel = modelInput.value.trim();
+
+    const useExistingKey = apiKeyInput.dataset.hasKey === "true";
+    const actualApiKey = useExistingKey ? settings.apiKey : rawApiKey;
 
     if (!newEndpoint) {
       setStatus("Endpoint URL is required.", "error");
@@ -113,13 +127,18 @@ function initSettingsModal() {
     }
 
     settings.endpoint = newEndpoint;
-    settings.apiKey = newApiKey;
     settings.model = newModel || DEFAULT_SETTINGS.model;
-    saveSettingsToStorage();
+    settings.apiKey = actualApiKey;
+
+    const password = getPassword();
+    const user = JSON.parse(sessionStorage.getItem("bibleCompanion_user"));
+
+    if (user && password) {
+      await saveUserSettings(user.id, settings, password);
+    }
 
     setStatus("Testing connection...", "");
-
-    const isConnected = await validateConnection(newEndpoint);
+    const isConnected = await validateConnection(newEndpoint, settings.apiKey);
 
     if (isConnected) {
       setStatus("Settings saved. Connection successful.", "success");
@@ -129,4 +148,8 @@ function initSettingsModal() {
   });
 }
 
-document.addEventListener("DOMContentLoaded", initSettingsModal);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initSettingsModal);
+} else {
+  initSettingsModal();
+}

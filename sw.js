@@ -1,4 +1,4 @@
-const CACHE_NAME = "bible-companion-v2";
+const CACHE_NAME = "bible-companion-v3";
 const STATIC_ASSETS = [
   "./",
   "./index.html",
@@ -6,25 +6,28 @@ const STATIC_ASSETS = [
   "./js/app.js",
   "./js/bible.js",
   "./js/settings.js",
-  "./manifest.json"
+  "./js/crypto.js",
+  "./js/sqlite.js",
+  "./js/auth.js",
+  "./js/login.js",
+  "./manifest.json",
+  "./vendor/sql-wasm.js",
+  "./vendor/sql-wasm.wasm"
 ];
 const DATA_ASSETS = [
   "./data/bsb-strongs.json"
 ];
 
-// Install: cache app shell
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_ASSETS);
     }).catch(() => {
-      // Install still succeeds if Bible data isn't cached yet
     })
   );
   self.skipWaiting();
 });
 
-// Activate: clean old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -37,7 +40,6 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch: serve from cache, fall back to network (except LLM API calls)
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 

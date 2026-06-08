@@ -487,6 +487,10 @@ header#app-header {
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius);
   font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.status-message:empty {
   display: none;
 }
 
@@ -534,7 +538,38 @@ header#app-header {
 }
 
 @media (max-width: 768px) {
-  #main-content {
+.header-controls {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.section-heading {
+  color: var(--text-secondary);
+  margin: 1rem 0 0.5rem;
+  font-weight: 600;
+}
+
+.section-heading.s1 {
+  font-size: 1.15rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.25rem;
+}
+
+.section-heading.s2 {
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.chapter-body {
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.verse-paragraph {
+  margin-bottom: 0.75rem;
+}
+
+#main-content {
     flex-direction: column;
   }
 

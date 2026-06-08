@@ -23,13 +23,45 @@ Your purpose is to provide commentary on Bible passages.
 
 import { loadBibleData, isLoaded, getBooks, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference } from "./bible.js";
 import { getSettings } from "./settings.js";
+import { isAuthenticated, getCurrentUser, getCurrentSettings } from "./auth.js";
+import { initDB } from "./sqlite.js";
+import { initLoginForm, showLoginScreen, hideLoginScreen } from "./login.js";
 
 let selectedVerses = new Set();
 let isLoading = false;
 
-init();
+async function bootstrap() {
+  try {
+    await initDB();
+  } catch (err) {
+    console.error("Failed to initialize database:", err);
+  }
+  try {
+    initLoginForm();
+  } catch (err) {
+    console.error("Failed to initialize login form:", err);
+  }
 
-async function init() {
+  if (isAuthenticated()) {
+    const sessionSettings = getCurrentSettings();
+    if (sessionSettings) {
+      window.loadSettings(sessionSettings);
+    }
+    hideLoginScreen();
+    startApp();
+  } else {
+    showLoginScreen();
+  }
+}
+
+window.addEventListener("user-login", async (e) => {
+  const { settings } = e.detail;
+  window.loadSettings(settings);
+  hideLoginScreen();
+  startApp();
+});
+
+async function startApp() {
   populateBookSelect();
   bindNavigationEvents();
   bindSendButton();
@@ -108,22 +140,18 @@ function renderChapter() {
 
   container.innerHTML = "";
 
-  // Chapter heading
   const chapterHeading = document.createElement("div");
   chapterHeading.className = "chapter-heading";
   chapterHeading.textContent = `${getCurrentBook()} ${getCurrentChapter()}`;
   container.appendChild(chapterHeading);
 
-  // Build structure with paragraph breaks and section headings
   const textBlock = document.createElement("div");
   textBlock.className = "chapter-body";
   let currentParagraph = document.createElement("div");
   currentParagraph.className = "verse-paragraph";
 
   for (const item of items) {
-    // Handle section headings
     if (item.type === "heading") {
-      // Flush current paragraph
       if (currentParagraph.children.length > 0) {
         textBlock.appendChild(currentParagraph);
         currentParagraph = document.createElement("div");
@@ -137,10 +165,8 @@ function renderChapter() {
       continue;
     }
 
-    // Handle verses
     const verse = item;
 
-    // Check for paragraph break
     if (verse.paragraph_break && currentParagraph.children.length > 0) {
       textBlock.appendChild(currentParagraph);
       currentParagraph = document.createElement("div");
@@ -164,7 +190,6 @@ function renderChapter() {
     currentParagraph.appendChild(verseSpan);
   }
 
-  // Flush last paragraph
   if (currentParagraph.children.length > 0) {
     textBlock.appendChild(currentParagraph);
   }
@@ -494,3 +519,5 @@ function registerServiceWorker() {
       });
   }
 }
+
+bootstrap();

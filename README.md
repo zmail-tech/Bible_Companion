@@ -1,12 +1,15 @@
 # Bible Companion
 
-A lightweight, installable Bible reader with AI-powered commentary. Built for focused study with a clean, dark-themed web interface.
+A lightweight, installable Bible reader with AI-powered commentary. Built for focused study with a clean, dark-themed web interface. Features secure multi-user authentication and fully encrypted per-user settings.
 
 ## Features
 
 - **BSB Bible Text** — Full Berean Standard Bible with Strong's number annotations
 - **AI Commentary** — Send selected verses to any OpenAI-compatible endpoint for AI-powered analysis
 - **Installable PWA** — Works offline as a progressive web app on desktop and mobile
+- **Multi-User Authentication** — Registration and login with PBKDF2-hashed passwords
+- **Encrypted Settings** — Per-user API keys and preferences encrypted with AES-GCM in a local SQLite database
+- **Login Gate** — AI features are locked until authentication
 - **Settings Panel** — Configure API endpoint, key, and model name per your LLM provider
 - **Keyboard Shortcuts** — `Ctrl+Enter` to send selected verses to AI
 
@@ -14,27 +17,41 @@ A lightweight, installable Bible reader with AI-powered commentary. Built for fo
 
 ```
 Bible_Companion/
-├── index.html           # Main web app (PWA)
-├── manifest.json        # PWA manifest
-├── sw.js                # Service worker for offline caching
-├── css/app.css          # Dark theme styles
+├── index.html              # Main web app (PWA)
+├── manifest.json           # PWA manifest
+├── sw.js                   # Service worker for offline caching
+├── css/app.css             # Dark theme styles
 ├── js/
-│   ├── app.js           # Main app logic and AI panel
-│   ├── bible.js         # Bible navigation and verse loading
-│   └── settings.js      # Settings modal and persistence
-├── bibles/              # Parsed Bible text (BSB)
+│   ├── app.js              # Main app logic and AI panel
+│   ├── bible.js            # Bible navigation and verse loading
+│   ├── auth.js             # User registration, login, and session management
+│   ├── sqlite.js           # In-browser SQLite (sql.js) database layer
+│   ├── settings.js         # Settings modal and persistence
+│   └── crypto.js           # PBKDF2 hashing and AES-GCM encryption utilities
+├── bibles/                 # Parsed Bible text (BSB)
 ├── data/
-│   └── bsb-strongs.json # Strong's number concordance data
-├── bsb-data/            # BSB preprocessing pipeline and raw data
-│   ├── ATTRIBUTION.md   # Required BSB/TH-OLD attribution
-│   ├── output/          # Preprocessed Bible data
-│   └── scripts/         # Python build and conversion scripts
-└── scripts/             # Python data processing helpers
+│   └── bsb-strongs.json    # Strong's number concordance data
+├── bsb-data/               # BSB preprocessing pipeline and raw data
+│   ├── ATTRIBUTION.md      # Required BSB/TH-OLD attribution
+│   ├── output/             # Preprocessed Bible data
+│   └── scripts/            # Python build and conversion scripts
+├── scripts/                # Python data processing helpers
+└── vendor/
+    └── sql-wasm.js         # Patched sql.js WASM module
 ```
+
+## Security & Storage
+
+The application uses a in-browser SQLite database (`sql.js`) backed by IndexedDB for persistence. All sensitive data is handled as follows:
+
+- **Passwords** hashed using PBKDF2 (SHA-256, 100,000 iterations) via the Web Crypto API
+- **API keys** encrypted per-user using AES-GCM, with the encryption key derived from the user's password
+- **Settings** stored as encrypted blobs in the `user_settings` SQLite table
+- **Login gate** ensures AI features remain inaccessible until authenticated
 
 ## Requirements
 
-- A modern web browser
+- A modern web browser with Web Crypto API support
 - An OpenAI-compatible API endpoint for AI commentary (e.g., OpenAI, LiteLLM, Ollama, any v1/chat/completions-compatible server)
 
 ## Setup
@@ -49,10 +66,11 @@ python3 -m http.server 8080
 
 ### First Run
 
-1. Click the settings gear icon in the header
-2. Enter your API endpoint URL (e.g., `https://api.openai.com/v1/chat/completions`)
-3. Optionally provide an API key and model name
-4. Save and begin reading
+1. Register a new account using the login button
+2. Click the settings gear icon in the header
+3. Enter your API endpoint URL (e.g., `https://api.openai.com/v1/chat/completions`)
+4. Optionally provide an API key and model name
+5. Save and begin reading
 
 ### Installing as PWA
 
