@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bsb-data"
+version = "1.0.0"
+description = "BSB Bible Data Preprocessing Pipeline - Convert BSB-USJ to optimized formats for web display and vector DB indexing"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "CC0-1.0"}
+keywords = ["bible", "bsb", "berean", "strongs", "usj", "jsonl"]
+
+dependencies = [
+    "usfmtc>=0.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+bsb-build = "scripts.build:main"
+bsb-validate = "scripts.validate:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true

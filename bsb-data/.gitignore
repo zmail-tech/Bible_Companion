@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+ENV/
+
+# Examples
+example/
+
+# Source data (downloaded separately)
+sources/
+
+# Build output (published to separate data repo) — keep text-only and greek-tsv,
+# ignore the rest. Negations require un-ignoring each parent dir level by level.
+output/*
+!output/base
+output/base/*
+!output/base/text-only
+!output/base/greek-tsv
+!output/base/hebrew-tsv
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.claude/
+
+# Logs
+*.log
+
+# mypy
+.mypy_cache/
+
+# ruff
+.ruff_cache/

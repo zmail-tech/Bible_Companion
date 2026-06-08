@@ -1,0 +1,223 @@
+name: Build and Publish
+
+on:
+  # Run weekly on Sunday at midnight UTC
+  schedule:
+    - cron: "0 0 * * 0"
+
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Force rebuild even if sources unchanged"
+        type: boolean
+        default: false
+
+# Required for pushing to data repo
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code repo
+        uses: actions/checkout@v4
+
+      # Generate token from GitHub App (for org repos)
+      # Requires secrets: APP_ID, APP_PRIVATE_KEY
+      # Or use DATA_REPO_TOKEN secret for personal repos
+      - name: Generate GitHub App token
+        id: app-token
+        if: ${{ vars.APP_ID != '' }}
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ vars.DATA_REPO_OWNER || github.repository_owner }}
+          repositories: ${{ vars.DATA_REPO || 'bsb-data-output' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install .
+
+      - name: Fetch source data
+        run: bash scripts/fetch-sources.sh
+
+      - name: Get source versions
+        id: versions
+        run: |
+          # Fetch latest commit info from GitHub API
+          BSB_DATA=$(curl -sf "https://api.github.com/repos/BSB-publishing/bsb2usfm/commits/main")
+          BSB_SHA_FULL=$(echo "$BSB_DATA" | jq -r '.sha')
+          BSB_SHA=$(echo "$BSB_SHA_FULL" | cut -c1-7)
+          BSB_DATE=$(echo "$BSB_DATA" | jq -r '.commit.committer.date' | cut -d'T' -f1)
+
+          BIBLE_DB_DATA=$(curl -sf "https://api.github.com/repos/scrollmapper/bible_databases/commits/master")
+          BIBLE_DB_SHA=$(echo "$BIBLE_DB_DATA" | jq -r '.sha' | cut -c1-7)
+
+          OSHB_DATA=$(curl -sf "https://api.github.com/repos/openscriptures/morphhb/commits/master")
+          OSHB_SHA=$(echo "$OSHB_DATA" | jq -r '.sha' | cut -c1-7)
+
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+
+          echo "bsb_sha=$BSB_SHA" >> $GITHUB_OUTPUT
+          echo "bsb_sha_full=$BSB_SHA_FULL" >> $GITHUB_OUTPUT
+          echo "bsb_date=$BSB_DATE" >> $GITHUB_OUTPUT
+          echo "bible_db_sha=$BIBLE_DB_SHA" >> $GITHUB_OUTPUT
+          echo "oshb_sha=$OSHB_SHA" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+
+          echo "### Source Versions" >> $GITHUB_STEP_SUMMARY
+          echo "- BSB-USJ: \`$BSB_SHA\` ($BSB_DATE)" >> $GITHUB_STEP_SUMMARY
+          echo "- Bible DBs: \`$BIBLE_DB_SHA\`" >> $GITHUB_STEP_SUMMARY
+          echo "- OSHB: \`$OSHB_SHA\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check if rebuild needed
+        id: check
+        run: |
+          # Try to fetch current VERSION.json from data repo
+          DATA_REPO="${{ vars.DATA_REPO || 'bsb-data-output' }}"
+          DATA_REPO_OWNER="${{ vars.DATA_REPO_OWNER || github.repository_owner }}"
+
+          curl -sf "https://raw.githubusercontent.com/${DATA_REPO_OWNER}/${DATA_REPO}/main/VERSION.json" \
+            -o current_version.json || echo '{"sources":{}}' > current_version.json
+
+          CURRENT_BSB=$(jq -r '.sources.bsb_usj.sha // ""' current_version.json)
+          CURRENT_BIBLE_DB=$(jq -r '.sources.bible_databases.sha // ""' current_version.json)
+          CURRENT_OSHB=$(jq -r '.sources.oshb.sha // ""' current_version.json)
+
+          echo "Current BSB: $CURRENT_BSB"
+          echo "New BSB: ${{ steps.versions.outputs.bsb_sha_full }}"
+
+          if [ "${{ inputs.force_rebuild }}" = "true" ]; then
+            echo "needs_build=true" >> $GITHUB_OUTPUT
+            echo "Forced rebuild requested" >> $GITHUB_STEP_SUMMARY
+          elif [ "$CURRENT_BSB" != "${{ steps.versions.outputs.bsb_sha_full }}" ]; then
+            echo "needs_build=true" >> $GITHUB_OUTPUT
+            echo "BSB source changed - rebuild needed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "needs_build=false" >> $GITHUB_OUTPUT
+            echo "No source changes - skipping build" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Build all outputs
+        if: steps.check.outputs.needs_build == 'true'
+        run: |
+          python3 -m scripts.build --all
+
+      - name: Prepare output statistics
+        if: steps.check.outputs.needs_build == 'true'
+        run: |
+          echo "### Build Statistics" >> $GITHUB_STEP_SUMMARY
+
+          DISPLAY_COUNT=$(find output/base/display -name "*.jsonl" | wc -l)
+          DISPLAY_SIZE=$(du -sh output/base/display | cut -f1)
+          echo "- Display: $DISPLAY_COUNT books, $DISPLAY_SIZE" >> $GITHUB_STEP_SUMMARY
+
+          PD_LINES=$(wc -l < output/base/index-pd/bible-index.jsonl)
+          PD_SIZE=$(du -sh output/base/index-pd | cut -f1)
+          echo "- Index-PD: $PD_LINES verses, $PD_SIZE" >> $GITHUB_STEP_SUMMARY
+
+          CCBY_SIZE=$(du -sh output/base/index-cc-by | cut -f1)
+          echo "- Index-CC-BY: $CCBY_SIZE" >> $GITHUB_STEP_SUMMARY
+
+      - name: Publish to data repository
+        if: steps.check.outputs.needs_build == 'true'
+        env:
+          # Use GitHub App token if available, otherwise fall back to PAT
+          DATA_REPO_TOKEN: ${{ steps.app-token.outputs.token || secrets.DATA_REPO_TOKEN }}
+          DATA_REPO: ${{ vars.DATA_REPO || 'bsb-data-output' }}
+          DATA_REPO_OWNER: ${{ vars.DATA_REPO_OWNER || github.repository_owner }}
+        run: |
+          # Clone data repo
+          git clone "https://x-access-token:${DATA_REPO_TOKEN}@github.com/${DATA_REPO_OWNER}/${DATA_REPO}.git" data-repo
+
+          # Clear old data (preserve .git)
+          cd data-repo
+          find . -maxdepth 1 -not -name '.git' -not -name '.' -exec rm -rf {} +
+          cd ..
+
+          # Copy new data
+          cp -r output/base data-repo/
+          cp -r output/schema data-repo/
+          cp output/VERSION.json data-repo/
+          cp output/README.md data-repo/
+
+          # Copy license files from code repo
+          cp LICENSE-CC0.md data-repo/
+          cp LICENSE-CC-BY.md data-repo/
+          cp ATTRIBUTION.md data-repo/
+
+          # Commit and push
+          cd data-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "Update: BSB ${{ steps.versions.outputs.bsb_sha }} (${{ steps.versions.outputs.build_date }})" \
+            -m "Source versions:" \
+            -m "- BSB-USJ: ${{ steps.versions.outputs.bsb_sha_full }}" \
+            -m "- Bible DBs: ${{ steps.versions.outputs.bible_db_sha }}" \
+            -m "- OSHB: ${{ steps.versions.outputs.oshb_sha }}" \
+            -m "" \
+            -m "Built by: ${{ github.repository }}@${{ github.sha }}"
+
+          git push
+
+          # Create version tag (skip if already exists)
+          TAG="v${{ steps.versions.outputs.build_date }}-${{ steps.versions.outputs.bsb_sha }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping tag creation"
+          else
+            git tag -a "$TAG" -m "BSB Data ${{ steps.versions.outputs.build_date }}"
+            git push origin "$TAG"
+          fi
+
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+          echo "### Published" >> $GITHUB_STEP_SUMMARY
+          echo "- Data repo: https://github.com/${DATA_REPO_OWNER}/${DATA_REPO}" >> $GITHUB_STEP_SUMMARY
+          echo "- Tag: \`$TAG\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create Release with zip
+        if: steps.check.outputs.needs_build == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.DATA_REPO_TOKEN }}
+          DATA_REPO: ${{ vars.DATA_REPO || 'bsb-data-output' }}
+          DATA_REPO_OWNER: ${{ vars.DATA_REPO_OWNER || github.repository_owner }}
+        run: |
+          # Create zip of the output
+          cd data-repo
+          zip -r "../bsb-data-${TAG}.zip" base/ schema/ VERSION.json README.md LICENSE-*.md ATTRIBUTION.md
+          cd ..
+
+          # Create release with zip attached (or update if exists)
+          if gh release view "$TAG" --repo "${DATA_REPO_OWNER}/${DATA_REPO}" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, uploading zip to existing release"
+            gh release upload "$TAG" "bsb-data-${TAG}.zip" --repo "${DATA_REPO_OWNER}/${DATA_REPO}" --clobber
+          else
+            gh release create "$TAG" \
+              --repo "${DATA_REPO_OWNER}/${DATA_REPO}" \
+              --title "BSB Data ${{ steps.versions.outputs.build_date }}" \
+              --notes "Source versions:
+          - BSB-USJ: \`${{ steps.versions.outputs.bsb_sha_full }}\`
+          - Bible DBs: \`${{ steps.versions.outputs.bible_db_sha }}\`
+          - OSHB: \`${{ steps.versions.outputs.oshb_sha }}\`
+
+          Built from: ${{ github.repository }}@${{ github.sha }}" \
+              "bsb-data-${TAG}.zip"
+          fi
+
+          echo "- Release: https://github.com/${DATA_REPO_OWNER}/${DATA_REPO}/releases/tag/${TAG}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Skip message
+        if: steps.check.outputs.needs_build == 'false'
+        run: |
+          echo "No changes detected in source repositories. Build skipped."
+          echo "Use 'force_rebuild' option to rebuild anyway."
