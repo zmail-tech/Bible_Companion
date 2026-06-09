@@ -1,4 +1,4 @@
-const CACHE_NAME = "bible-companion-v3";
+const CACHE_NAME = "bible-companion-v5";
 const STATIC_ASSETS = [
   "./",
   "./index.html",
@@ -6,13 +6,7 @@ const STATIC_ASSETS = [
   "./js/app.js",
   "./js/bible.js",
   "./js/settings.js",
-  "./js/crypto.js",
-  "./js/sqlite.js",
-  "./js/auth.js",
-  "./js/login.js",
-  "./manifest.json",
-  "./vendor/sql-wasm.js",
-  "./vendor/sql-wasm.wasm"
+  "./manifest.json"
 ];
 const DATA_ASSETS = [
   "./data/bsb-strongs.json"

@@ -1,7 +1,6 @@
-// Settings modal and SQLite persistence
+// Settings modal and localStorage persistence
 
-import { saveUserSettings } from "./sqlite.js";
-import { getPassword } from "./auth.js";
+const STORAGE_KEY = "bibleCompanion_settings";
 
 const DEFAULT_SETTINGS = {
   endpoint: "https://api.openai.com/v1/chat/completions",
@@ -16,6 +15,8 @@ window.settings = null;
 window.loadSettings = function(s) {
   settings = s || { ...DEFAULT_SETTINGS };
   window.settings = settings;
+  console.log("[settings] window.loadSettings called with:", s);
+  console.log("[settings] window.loadSettings - storage key:", STORAGE_KEY);
 };
 
 export function getSettings() {
@@ -28,6 +29,37 @@ export function setApiKey(key) {
 
 export function clearApiKey() {
   settings.apiKey = "";
+}
+
+export function loadSettingsLocally() {
+  try {
+    console.log("[settings] loadSettingsLocally: STORAGE_KEY =", STORAGE_KEY);
+    console.log("[settings] loadSettingsLocally: all localStorage keys:", Object.keys(localStorage));
+    const raw = localStorage.getItem(STORAGE_KEY);
+    console.log("[settings] loadSettingsLocally: raw =", raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      console.log("[settings] loadSettingsLocally: parsed =", parsed);
+      return parsed;
+    }
+  } catch (e) {
+    console.error("[settings] Failed to load settings from localStorage:", e);
+  }
+  console.log("[settings] loadSettingsLocally: returning null (no data found)");
+  return null;
+}
+
+function saveSettingsLocally() {
+  try {
+    const toSave = JSON.stringify(settings);
+    console.log("[settings] saveSettingsLocally: saving =", toSave);
+    localStorage.setItem(STORAGE_KEY, toSave);
+    // Verify by reading back immediately
+    const verify = localStorage.getItem(STORAGE_KEY);
+    console.log("[settings] saveSettingsLocally: verified =", verify);
+  } catch (e) {
+    console.error("[settings] Failed to save settings to localStorage:", e);
+  }
 }
 
 function initSettingsModal() {
@@ -94,15 +126,9 @@ function initSettingsModal() {
     if (e.key === "Escape") closeModal();
   });
 
-  resetBtn.addEventListener("click", async () => {
+  resetBtn.addEventListener("click", () => {
     settings = { ...DEFAULT_SETTINGS };
-    const password = getPassword();
-    if (password) {
-      const user = JSON.parse(sessionStorage.getItem("bibleCompanion_user"));
-      if (user) {
-        await saveUserSettings(user.id, settings, password);
-      }
-    }
+    saveSettingsLocally();
     endpointInput.value = settings.endpoint;
     apiKeyInput.value = "";
     apiKeyInput.dataset.hasKey = "false";
@@ -130,12 +156,7 @@ function initSettingsModal() {
     settings.model = newModel || DEFAULT_SETTINGS.model;
     settings.apiKey = actualApiKey;
 
-    const password = getPassword();
-    const user = JSON.parse(sessionStorage.getItem("bibleCompanion_user"));
-
-    if (user && password) {
-      await saveUserSettings(user.id, settings, password);
-    }
+    saveSettingsLocally();
 
     setStatus("Testing connection...", "");
     const isConnected = await validateConnection(newEndpoint, settings.apiKey);

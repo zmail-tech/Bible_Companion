@@ -20,44 +20,22 @@ Your purpose is to provide commentary on Bible passages.
 - **Accuracy:** Ensure responses are unbiased, positive, and accurate.`;
 
 import { loadBibleData, isLoaded, getBooks, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference } from "./bible.js";
-import { getSettings } from "./settings.js";
-import { isAuthenticated, getCurrentUser, getCurrentSettings } from "./auth.js";
-import { initDB } from "./sqlite.js";
-import { initLoginForm, showLoginScreen, hideLoginScreen } from "./login.js";
+import { getSettings, loadSettingsLocally } from "./settings.js";
 
 let selectedVerses = new Set();
 let isLoading = false;
 
-async function bootstrap() {
-  try {
-    await initDB();
-  } catch (err) {
-    console.error("Failed to initialize database:", err);
-  }
-  try {
-    initLoginForm();
-  } catch (err) {
-    console.error("Failed to initialize login form:", err);
-  }
-
-  if (isAuthenticated()) {
-    const sessionSettings = getCurrentSettings();
-    if (sessionSettings) {
-      window.loadSettings(sessionSettings);
-    }
-    hideLoginScreen();
-    startApp();
+function bootstrap() {
+  const persisted = loadSettingsLocally();
+  console.log("[app] bootstrap: persisted settings =", persisted);
+  console.log("[app] bootstrap: window.loadSettings =", typeof window.loadSettings);
+  if (persisted) {
+    window.loadSettings(persisted);
   } else {
-    showLoginScreen();
+    console.log("[app] bootstrap: no persisted settings, using defaults");
   }
-}
-
-window.addEventListener("user-login", async (e) => {
-  const { settings } = e.detail;
-  window.loadSettings(settings);
-  hideLoginScreen();
   startApp();
-});
+}
 
 async function startApp() {
   populateBookSelect();
