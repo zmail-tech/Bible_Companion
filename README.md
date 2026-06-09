@@ -2,9 +2,11 @@
 
 A lightweight, installable Bible reader with AI-powered commentary. Built for focused study with a clean, dark-themed web interface. Settings are stored in plain text in localStorage -- suitable for local-only personal use.
 
+This version has been simplified to run purely client-side. All previous server-side dependencies, SQLite persistence, and authentication layers have been removed, relying solely on local storage.
+
 ## Features
 
-- **BSB Bible Text** — Full Berean Standard Bible with Strong's number annotations
+- **BSB Bible Text** — Full berean Standard Bible with Strong's number annotations
 - **AI Commentary** — Send selected verses to any OpenAI-compatible endpoint for AI-powered analysis
 - **Installable PWA** — Works offline as a progressive web app on desktop and mobile
 - **Plain-Text Settings** — API keys and preferences stored in localStorage
@@ -35,7 +37,9 @@ Bible_Companion/
 
 ## Storage
 
-Settings (API endpoint, key, and model) are stored as plain JSON in the browser's localStorage. This is suitable for local-only personal use. No server-side data is stored, no user accounts exist, and no encryption is applied.
+Settings (API endpoint, key, and model) are stored in plain JSON format in the browser's localStorage.
+
+**Warning:** No server-side encryption or authentication is applied, so plain text API keys are accessible locally. This application must only be used locally.
 
 ## Requirements
 
