@@ -14,6 +14,19 @@
     <header id="app-header">
       <h1>Bible Companion</h1>
       <div class="header-controls">
+        <button id="theme-toggle" class="icon-btn" aria-label="Toggle theme" title="Toggle dark/light theme">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
         <button id="settings-btn" class="icon-btn" aria-label="Settings" title="Settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
@@ -24,36 +37,52 @@
     </header>
 
     <main id="main-content">
-      <section id="bible-reader">
-        <nav id="navigation-bar">
-          <div class="nav-group">
-            <label for="book-select">Book</label>
-            <select id="book-select"></select>
-          </div>
-          <div class="nav-group">
-            <label for="chapter-select">Chapter</label>
-            <select id="chapter-select"></select>
-          </div>
-          <div class="nav-actions">
-            <button id="send-to-ai" class="btn-primary" disabled title="Send selected verses to AI (Ctrl+Enter)">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m21 15-3-3v-4a1 1 0 0 0-1-1h-7.086a1 1 0 0 0-.707.293L4.675 10.293A1 1 0 0 0 4 11v7a1 1 0 0 0 1 1h5"></path>
-                <circle cx="12" cy="7" r="1"></circle>
-              </svg>
-              Send to AI
-            </button>
-          </div>
-        </nav>
-        <div id="verse-container"></div>
-      </section>
+      <div id="split-container">
+        <section id="bible-reader">
+          <nav id="navigation-bar">
+            <div class="nav-group">
+              <label for="book-select">Book</label>
+              <select id="book-select"></select>
+            </div>
+            <div class="nav-group">
+              <label for="chapter-select">Chapter</label>
+              <select id="chapter-select"></select>
+            </div>
+            <div class="nav-actions">
+              <div class="nav-group">
+                <label for="intent-select">AI Intent</label>
+                <select id="intent-select">
+                  <option value="commentary" selected>Commentary</option>
+                  <option value="reference">Reference Verses</option>
+                  <option value="context">Context &amp; Background</option>
+                  <option value="wordstudy">Word Study</option>
+                  <option value="application">Modern Application</option>
+                  <option value="questions">Study Questions</option>
+                  <option value="summary">Summary</option>
+                </select>
+              </div>
+              <button id="send-to-ai" class="btn-primary" disabled title="Send selected verses to AI (Ctrl+Enter)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m21 15-3-3v-4a1 1 0 0 0-1-1h-7.086a1 1 0 0 0-.707.293L4.675 10.293A1 1 0 0 0 4 11v7a1 1 0 0 0 1 1h5"></path>
+                  <circle cx="12" cy="7" r="1"></circle>
+                </svg>
+                Send to Bible Companion
+              </button>
+            </div>
+          </nav>
+          <div id="verse-container"></div>
+        </section>
 
-      <section id="ai-panel">
-        <div id="ai-header">
-          <h2>AI Commentary</h2>
-          <span id="ai-status"></span>
-        </div>
-        <div id="ai-response"></div>
-      </section>
+        <div id="splitter"></div>
+
+        <section id="ai-panel">
+          <div id="ai-header">
+            <h2>AI Commentary</h2>
+            <span id="ai-status"></span>
+          </div>
+          <div id="ai-response"></div>
+        </section>
+      </div>
     </main>
   </div>
 

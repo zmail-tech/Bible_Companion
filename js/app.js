@@ -22,8 +22,82 @@ Your purpose is to provide commentary on Bible passages.
 import { loadBibleData, isLoaded, getBooks, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference } from "./bible.js";
 import { getSettings, loadSettingsLocally } from "./settings.js";
 
+const INTENT_PROMPTS = {
+  commentary: "Provide a detailed theological commentary on the selected passage. Use Southern Baptist theological perspectives and explain the text clearly.",
+  reference: "Identify and list 5 key cross-reference verses that support, quote, or allude to the selected passage. Provide a brief explanation of the connection for each.",
+  context: "Analyze the historical context of this passage. Specifically detail the Author, the intended Audience, the Historical Setting, and any relevant cultural customs.",
+  wordstudy: "Perform a linguistic analysis of the passage. Identify key Hebrew or Greek words, their original meanings, and how they inform the translation.",
+  application: "Explain the practical application of this passage. How does this teaching apply to a modern believer's life, relationships, or work?",
+  questions: "Generate 5 thoughtful discussion questions based on this passage suitable for a Bible study or small group.",
+  summary: "Provide a concise, one-paragraph summary of the main points and themes of this passage."
+};
+
+const DEFAULT_INTENT = "commentary";
+
 let selectedVerses = new Set();
 let isLoading = false;
+
+/* --- Theme --- */
+
+function initTheme() {
+  const saved = localStorage.getItem("bibleCompanion_theme");
+  if (saved === "dark") {
+    document.documentElement.setAttribute("data-theme", "dark");
+  }
+
+  const toggle = document.getElementById("theme-toggle");
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      const current = document.documentElement.getAttribute("data-theme");
+      const next = current === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next === "light" ? "" : next);
+      localStorage.setItem("bibleCompanion_theme", next);
+    });
+  }
+}
+
+/* --- Splitter --- */
+
+function initSplitter() {
+  const splitter = document.getElementById("splitter");
+  const container = document.getElementById("split-container");
+  const bibleReader = document.getElementById("bible-reader");
+  if (!splitter || !container || !bibleReader) return;
+
+  const savedSplit = localStorage.getItem("bibleCompanion_splitter");
+  if (savedSplit) {
+    const pct = clamp(parseFloat(savedSplit), 20, 80);
+    bibleReader.style.flex = `0 0 ${pct}%`;
+  }
+
+  let isDragging = false;
+
+  splitter.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    e.preventDefault();
+    document.body.style.userSelect = "none";
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    const rect = container.getBoundingClientRect();
+    const offset = e.clientX - rect.left;
+    const pct = (offset / rect.width) * 100;
+    const clamped = clamp(pct, 20, 80);
+    bibleReader.style.flex = `0 0 ${clamped}%`;
+    localStorage.setItem("bibleCompanion_splitter", String(clamped));
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    document.body.style.userSelect = "";
+  });
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
 
 function bootstrap() {
   const persisted = loadSettingsLocally();
@@ -37,11 +111,25 @@ function bootstrap() {
   startApp();
 }
 
+function initIntentSelector() {
+  const select = document.getElementById("intent-select");
+  const saved = localStorage.getItem("bibleCompanion_intent");
+  if (saved && INTENT_PROMPTS[saved]) {
+    select.value = saved;
+  }
+  select.addEventListener("change", () => {
+    localStorage.setItem("bibleCompanion_intent", select.value);
+  });
+}
+
 async function startApp() {
+  initTheme();
+  initSplitter();
   populateBookSelect();
   bindNavigationEvents();
   bindSendButton();
   bindKeyboardShortcuts();
+  initIntentSelector();
 
   const success = await loadBibleData();
   if (success) {
@@ -321,14 +409,21 @@ async function sendToAI() {
   const statusEl = document.getElementById("ai-status");
 
   isLoading = true;
-  responseEl.innerHTML = '<span class="loading-spinner"></span> Loading commentary...';
+  const intentSelect = document.getElementById("intent-select");
+  const intent = intentSelect.value || DEFAULT_INTENT;
+  const intentLabel = intentSelect.options[intentSelect.selectedIndex].text;
+  const promptString = INTENT_PROMPTS[intent] || INTENT_PROMPTS[DEFAULT_INTENT];
+  const finalPrompt = `${promptString}\n\nHere is the text to analyze:\n"${selectedText}"`;
+
+  responseEl.innerHTML = `<span class="loading-spinner"></span> Loading ${intentLabel}...`;
   statusEl.textContent = "Requesting...";
+  document.querySelector("#ai-header h2").textContent = `AI: ${intentLabel}`;
 
   const requestBody = {
     model: settings.model,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: `Provide commentary on the following passage:\n\n${selectedText}` }
+      { role: "user", content: finalPrompt }
     ],
     max_tokens: 2048,
     temperature: 0.7
