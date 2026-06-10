@@ -1,6 +1,7 @@
 // Settings modal and localStorage persistence
 
 const STORAGE_KEY = "bibleCompanion_settings";
+const MODELS_STORAGE_KEY = "bibleCompanion_models";
 
 const DEFAULT_SETTINGS = {
   endpoint: "https://api.openai.com/v1/chat/completions",
@@ -9,6 +10,7 @@ const DEFAULT_SETTINGS = {
 };
 
 let settings = { ...DEFAULT_SETTINGS };
+let availableModels = [];
 
 window.settings = null;
 
@@ -62,6 +64,93 @@ function saveSettingsLocally() {
   }
 }
 
+function deriveModelsUrl(endpointUrl) {
+  try {
+    let url = endpointUrl.replace(/\/+$/, "");
+    if (url.endsWith("/models")) return url;
+    const v1Idx = url.indexOf("/v1");
+    if (v1Idx !== -1) {
+      return url.slice(0, v1Idx + 3) + "/models";
+    }
+    return url + "/v1/models";
+  } catch {
+    return endpointUrl;
+  }
+}
+
+async function fetchModels(modelsUrl, apiKey) {
+  try {
+    const opts = {
+      method: "GET",
+      headers: { "Accept": "application/json" }
+    };
+    if (apiKey) {
+      opts.headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+    const res = await fetch(modelsUrl, opts);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && Array.isArray(data.data)) {
+      return data.data.map(m => typeof m === "string" ? m : m.id).filter(Boolean);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function populateModelSelect(models) {
+  const select = document.getElementById("model-select");
+  select.innerHTML = '<option value="">-- Select a model --</option>';
+  models.forEach(id => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    select.appendChild(opt);
+  });
+  availableModels = models;
+}
+
+function switchToSelectMode() {
+  document.getElementById("model-select").style.display = "";
+  document.getElementById("model-name").style.display = "none";
+}
+
+function switchToInputMode() {
+  document.getElementById("model-select").style.display = "none";
+  document.getElementById("model-name").style.display = "";
+}
+
+function saveModelFromUI() {
+  const select = document.getElementById("model-select");
+  const input = document.getElementById("model-name");
+  if (select.style.display !== "none" && select.value) {
+    settings.model = select.value;
+  } else if (input.style.display !== "none" && input.value.trim()) {
+    settings.model = input.value.trim();
+  }
+}
+
+function loadCachedModels() {
+  try {
+    const raw = localStorage.getItem(MODELS_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+
+function cacheModels(endpoint, models) {
+  try {
+    localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify({ endpoint, models }));
+  } catch {}
+}
+
+function clearCachedModels() {
+  try {
+    localStorage.removeItem(MODELS_STORAGE_KEY);
+  } catch {}
+}
+
 function initSettingsModal() {
   const modal = document.getElementById("settings-modal");
   const openBtn = document.getElementById("settings-btn");
@@ -73,8 +162,10 @@ function initSettingsModal() {
   const endpointInput = document.getElementById("endpoint-url");
   const apiKeyInput = document.getElementById("api-key");
   const modelInput = document.getElementById("model-name");
+  const modelSelect = document.getElementById("model-select");
   const themeSelect = document.getElementById("theme-select");
   const statusEl = document.getElementById("connection-status");
+  const fetchModelsBtn = document.getElementById("fetch-models-btn");
 
   function openModal() {
     endpointInput.value = settings.endpoint;
@@ -90,6 +181,16 @@ function initSettingsModal() {
     } else {
       apiKeyInput.value = "";
       apiKeyInput.dataset.hasKey = "false";
+    }
+
+    const cached = loadCachedModels();
+    if (cached && cached.endpoint === settings.endpoint && cached.models && cached.models.length > 0) {
+      populateModelSelect(cached.models);
+      modelSelect.value = settings.model;
+      switchToSelectMode();
+    } else {
+      switchToInputMode();
+      modelInput.value = settings.model;
     }
 
     modal.classList.add("active");
@@ -121,6 +222,36 @@ function initSettingsModal() {
     }
   }
 
+  fetchModelsBtn.addEventListener("click", async () => {
+    const currentEndpoint = endpointInput.value.trim() || settings.endpoint;
+    const rawApiKey = apiKeyInput.value;
+    const useExistingKey = apiKeyInput.dataset.hasKey === "true";
+    const actualApiKey = useExistingKey ? settings.apiKey : rawApiKey;
+
+    if (!currentEndpoint) {
+      setStatus("Please enter an endpoint URL first.", "error");
+      endpointInput.focus();
+      return;
+    }
+
+    const modelsUrl = deriveModelsUrl(currentEndpoint);
+    setStatus("Fetching models...", "");
+
+    const models = await fetchModels(modelsUrl, actualApiKey);
+
+    if (models && models.length > 0) {
+      cacheModels(currentEndpoint, models);
+      populateModelSelect(models);
+      modelSelect.value = settings.model;
+      switchToSelectMode();
+      setStatus(`Found ${models.length} models.`, "success");
+    } else {
+      switchToInputMode();
+      modelInput.value = settings.model;
+      setStatus("Could not fetch models. Enter a model name manually.", "error");
+    }
+  });
+
   openBtn.addEventListener("click", openModal);
   closeBtn.addEventListener("click", closeModal);
   overlay.addEventListener("click", closeModal);
@@ -145,17 +276,26 @@ function initSettingsModal() {
     }
   });
 
+  modelSelect.addEventListener("change", () => {
+    if (modelSelect.value) {
+      settings.model = modelSelect.value;
+    }
+  });
+
   modal.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeModal();
   });
 
   resetBtn.addEventListener("click", () => {
     settings = { ...DEFAULT_SETTINGS };
+    availableModels = [];
+    clearCachedModels();
     saveSettingsLocally();
     endpointInput.value = settings.endpoint;
     apiKeyInput.value = "";
     apiKeyInput.dataset.hasKey = "false";
     modelInput.value = settings.model;
+    switchToInputMode();
     setStatus("Settings reset to defaults.", "success");
   });
 
@@ -164,7 +304,8 @@ function initSettingsModal() {
 
     const newEndpoint = endpointInput.value.trim();
     const rawApiKey = apiKeyInput.value;
-    const newModel = modelInput.value.trim();
+
+    saveModelFromUI();
 
     const useExistingKey = apiKeyInput.dataset.hasKey === "true";
     const actualApiKey = useExistingKey ? settings.apiKey : rawApiKey;
@@ -176,7 +317,7 @@ function initSettingsModal() {
     }
 
     settings.endpoint = newEndpoint;
-    settings.model = newModel || DEFAULT_SETTINGS.model;
+    settings.model = settings.model || DEFAULT_SETTINGS.model;
     settings.apiKey = actualApiKey;
 
     saveSettingsLocally();
