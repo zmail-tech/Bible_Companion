@@ -73,6 +73,7 @@ function initSettingsModal() {
   const endpointInput = document.getElementById("endpoint-url");
   const apiKeyInput = document.getElementById("api-key");
   const modelInput = document.getElementById("model-name");
+  const themeSelect = document.getElementById("theme-select");
   const statusEl = document.getElementById("connection-status");
 
   function openModal() {
@@ -80,6 +81,8 @@ function initSettingsModal() {
     modelInput.value = settings.model;
     statusEl.className = "status-message";
     statusEl.textContent = "";
+    const savedTheme = localStorage.getItem("bibleCompanion_theme") || "light";
+    themeSelect.value = savedTheme;
 
     if (settings.apiKey) {
       apiKeyInput.value = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
@@ -121,6 +124,26 @@ function initSettingsModal() {
   openBtn.addEventListener("click", openModal);
   closeBtn.addEventListener("click", closeModal);
   overlay.addEventListener("click", closeModal);
+
+  themeSelect.addEventListener("change", () => {
+    const theme = themeSelect.value;
+    localStorage.setItem("bibleCompanion_theme", theme);
+    if (window.applyTheme) {
+      window.applyTheme(theme);
+    } else {
+      const html = document.documentElement;
+      if (theme === "light") {
+        html.removeAttribute("data-theme");
+      } else {
+        html.setAttribute("data-theme", theme);
+      }
+      const themeColors = { light: "#d4c5a9", dark: "#1a1a2e", modern: "#13151b" };
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) {
+        meta.content = themeColors[theme] || themeColors.light;
+      }
+    }
+  });
 
   modal.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeModal();

@@ -39,22 +39,30 @@ let isLoading = false;
 
 /* --- Theme --- */
 
-function initTheme() {
-  const saved = localStorage.getItem("bibleCompanion_theme");
-  if (saved === "dark") {
-    document.documentElement.setAttribute("data-theme", "dark");
+function applyTheme(theme) {
+  const html = document.documentElement;
+  if (theme === "light") {
+    html.removeAttribute("data-theme");
+  } else {
+    html.setAttribute("data-theme", theme);
   }
-
-  const toggle = document.getElementById("theme-toggle");
-  if (toggle) {
-    toggle.addEventListener("click", () => {
-      const current = document.documentElement.getAttribute("data-theme");
-      const next = current === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", next === "light" ? "" : next);
-      localStorage.setItem("bibleCompanion_theme", next);
-    });
+  const themeColors = {
+    light: "#d4c5a9",
+    dark: "#1a1a2e",
+    modern: "#13151b"
+  };
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.content = themeColors[theme] || themeColors.light;
   }
 }
+
+function initTheme() {
+  const saved = localStorage.getItem("bibleCompanion_theme") || "light";
+  applyTheme(saved);
+}
+
+window.applyTheme = applyTheme;
 
 /* --- Splitter --- */
 
