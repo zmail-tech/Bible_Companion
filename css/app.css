@@ -349,6 +349,37 @@ header#app-header {
   position: relative;
 }
 
+.chapter-nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.chapter-arrow {
+  padding: 0.2rem 0.3rem;
+  min-width: 22px;
+  height: 26px;
+}
+
+.chapter-arrow:hover {
+  background: var(--gold-light);
+  color: var(--navy);
+}
+
+.chapter-arrow:active {
+  border-top: 2px solid var(--bevel-dark);
+  border-left: 2px solid var(--bevel-dark);
+  border-bottom: 2px solid var(--bevel-light);
+  border-right: 2px solid var(--bevel-light);
+}
+
+.chapter-nav .chapter-nav-controls select {
+  min-width: 50px;
+  width: 60px;
+  text-align: center;
+  padding: 0.25rem 0.25rem;
+}
+
 .chapter-heading::before {
   content: "\273F \273F \273F";
   display: block;
@@ -896,6 +927,15 @@ header#app-header {
   border: 1px solid var(--border-dark);
 }
 
+[data-theme="modern"] .chapter-arrow {
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+}
+
+[data-theme="modern"] .chapter-arrow:active {
+  border: 1px solid var(--border-dark);
+}
+
 [data-theme="modern"] .btn-primary {
   border: 1px solid var(--border-light);
   border-radius: 6px;
@@ -1062,6 +1102,11 @@ header#app-header {
     padding: 0.5rem 0.5rem;
     margin: 2px;
     gap: 0.5rem;
+  }
+
+  .chapter-nav .chapter-nav-controls select {
+    min-width: 40px;
+    width: 50px;
   }
 
   .nav-group select {

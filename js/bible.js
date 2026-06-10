@@ -108,3 +108,28 @@ export function getCurrentChapter() {
 export function formatReference(book, chapter, verse) {
   return `${book} ${chapter}:${verse}`;
 }
+
+export function goNextChapter() {
+  const maxChapters = getChaptersForBook(currentBook);
+  if (currentChapter < maxChapters) {
+    currentChapter++;
+  } else {
+    const bookIndex = BOOK_ORDER.indexOf(currentBook);
+    if (bookIndex < BOOK_ORDER.length - 1) {
+      currentBook = BOOK_ORDER[bookIndex + 1];
+      currentChapter = 1;
+    }
+  }
+}
+
+export function goPrevChapter() {
+  if (currentChapter > 1) {
+    currentChapter--;
+  } else {
+    const bookIndex = BOOK_ORDER.indexOf(currentBook);
+    if (bookIndex > 0) {
+      currentBook = BOOK_ORDER[bookIndex - 1];
+      currentChapter = getChaptersForBook(currentBook);
+    }
+  }
+}

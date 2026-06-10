@@ -19,7 +19,7 @@ Your purpose is to provide commentary on Bible passages.
 - **Clarify:** Ask clarifying questions if needed; avoid assumptions.
 - **Accuracy:** Ensure responses are unbiased, positive, and accurate.`;
 
-import { loadBibleData, isLoaded, getBooks, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference } from "./bible.js";
+import { loadBibleData, isLoaded, getBooks, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference, goNextChapter, goPrevChapter } from "./bible.js";
 import { getSettings, loadSettingsLocally } from "./settings.js";
 
 const INTENT_PROMPTS = {
@@ -183,6 +183,8 @@ function updateChapterSelect() {
 function bindNavigationEvents() {
   const bookSelect = document.getElementById("book-select");
   const chapterSelect = document.getElementById("chapter-select");
+  const prevBtn = document.getElementById("prev-chapter");
+  const nextBtn = document.getElementById("next-chapter");
 
   bookSelect.addEventListener("change", () => {
     setCurrentBook(bookSelect.value);
@@ -193,6 +195,22 @@ function bindNavigationEvents() {
 
   chapterSelect.addEventListener("change", () => {
     setCurrentChapter(Number(chapterSelect.value));
+    renderChapter();
+  });
+
+  prevBtn.addEventListener("click", () => {
+    goPrevChapter();
+    bookSelect.value = getCurrentBook();
+    updateChapterSelect();
+    chapterSelect.value = getCurrentChapter();
+    renderChapter();
+  });
+
+  nextBtn.addEventListener("click", () => {
+    goNextChapter();
+    bookSelect.value = getCurrentBook();
+    updateChapterSelect();
+    chapterSelect.value = getCurrentChapter();
     renderChapter();
   });
 }

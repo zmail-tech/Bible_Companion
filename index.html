@@ -31,9 +31,21 @@
               <label for="book-select">Book</label>
               <select id="book-select"></select>
             </div>
-            <div class="nav-group">
+            <div class="nav-group chapter-nav">
               <label for="chapter-select">Chapter</label>
-              <select id="chapter-select"></select>
+              <div class="chapter-nav-controls">
+                <button id="prev-chapter" class="icon-btn chapter-arrow" aria-label="Previous chapter" title="Previous chapter">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                </button>
+                <select id="chapter-select"></select>
+                <button id="next-chapter" class="icon-btn chapter-arrow" aria-label="Next chapter" title="Next chapter">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="nav-actions">
               <div class="nav-group">
