@@ -19,7 +19,7 @@ Your purpose is to provide commentary on Bible passages.
 - **Clarify:** Ask clarifying questions if needed; avoid assumptions.
 - **Accuracy:** Ensure responses are unbiased, positive, and accurate.`;
 
-import { loadBibleData, isLoaded, getBooks, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference, goNextChapter, goPrevChapter } from "./bible.js";
+import { loadBibleData, isLoaded, getBooks, getOldTestament, getNewTestament, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference, goNextChapter, goPrevChapter } from "./bible.js";
 import { loadSettingsLocally, getActiveProvider } from "./settings.js";
 
 const INTENT_PROMPTS = {
@@ -34,8 +34,159 @@ const INTENT_PROMPTS = {
 
 const DEFAULT_INTENT = "commentary";
 
-let selectedVerses = new Set();
+let tabs = [];
+let activeTabId = null;
+let nextTabId = 1;
 let isLoading = false;
+
+/* --- Tabs --- */
+
+function createTab(book, chapter) {
+  const id = nextTabId++;
+  const tab = {
+    id,
+    book: book || getCurrentBook(),
+    chapter: chapter || getCurrentChapter(),
+    selectedVerses: new Set(),
+    aiResponse: "",
+    aiStatus: "",
+    aiTitle: "AI Commentary",
+    intent: "commentary",
+  };
+  tabs.push(tab);
+  switchToTab(id);
+  saveTabsToStorage();
+  return tab;
+}
+
+function closeTab(tabId) {
+  if (tabs.length <= 1) return;
+  const idx = tabs.findIndex(t => t.id === tabId);
+  if (idx === -1) return;
+  tabs.splice(idx, 1);
+  if (activeTabId === tabId) {
+    const newIdx = Math.min(idx, tabs.length - 1);
+    switchToTab(tabs[newIdx].id);
+  }
+  renderTabBar();
+  saveTabsToStorage();
+}
+
+function switchToTab(tabId) {
+  const tab = tabs.find(t => t.id === tabId);
+  if (!tab) return;
+  activeTabId = tab.id;
+  setCurrentBook(tab.book);
+  setCurrentChapter(tab.chapter);
+  updateBookTrigger();
+  updateChapterSelect();
+  const chapterSelect = document.getElementById("chapter-select");
+  if (chapterSelect) chapterSelect.value = tab.chapter;
+  renderChapter();
+  restoreAIResponse(tab);
+  renderTabBar();
+  saveTabsToStorage();
+}
+
+function getActiveTab() {
+  return tabs.find(t => t.id === activeTabId) || null;
+}
+
+function restoreAIResponse(tab) {
+  const responseEl = document.getElementById("ai-response");
+  const statusEl = document.getElementById("ai-status");
+  const titleEl = document.querySelector("#ai-header h2");
+  if (tab.aiResponse) {
+    responseEl.innerHTML = tab.aiResponse;
+  } else {
+    responseEl.innerHTML = '<p class="selection-hint">Select verses and send to Bible Companion for commentary.</p>';
+  }
+  if (statusEl) statusEl.textContent = tab.aiStatus || "";
+  if (titleEl) titleEl.textContent = tab.aiTitle || "AI Commentary";
+}
+
+function renderTabBar() {
+  const tabBar = document.getElementById("tab-bar");
+  if (!tabBar) return;
+  tabBar.innerHTML = "";
+  for (const tab of tabs) {
+    const tabItem = document.createElement("div");
+    tabItem.className = `tab-item${tab.id === activeTabId ? " active" : ""}`;
+    tabItem.dataset.tabId = tab.id;
+    tabItem.addEventListener("click", (e) => {
+      if (e.target.classList.contains("tab-close")) return;
+      switchToTab(tab.id);
+    });
+
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "tab-title";
+    titleSpan.textContent = `${tab.book} ${tab.chapter}`;
+    tabItem.appendChild(titleSpan);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "tab-close";
+    closeBtn.setAttribute("aria-label", "Close tab");
+    closeBtn.textContent = "\u00d7";
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeTab(tab.id);
+    });
+    tabItem.appendChild(closeBtn);
+
+    tabBar.appendChild(tabItem);
+  }
+
+  const addBtn = document.createElement("button");
+  addBtn.id = "add-tab-btn";
+  addBtn.className = "icon-btn";
+  addBtn.setAttribute("aria-label", "New tab");
+  addBtn.textContent = "+";
+  addBtn.addEventListener("click", () => {
+    const active = getActiveTab();
+    createTab(active ? active.book : "Genesis", active ? active.chapter : 1);
+  });
+  tabBar.appendChild(addBtn);
+}
+
+function saveTabsToStorage() {
+  const data = tabs.map(t => ({
+    id: t.id,
+    book: t.book,
+    chapter: t.chapter,
+  }));
+  localStorage.setItem("bibleCompanion_tabs", JSON.stringify(data));
+  localStorage.setItem("bibleCompanion_activeTabId", String(activeTabId));
+  localStorage.setItem("bibleCompanion_nextTabId", String(nextTabId));
+}
+
+function loadTabsFromStorage() {
+  try {
+    const data = JSON.parse(localStorage.getItem("bibleCompanion_tabs"));
+    const savedActiveId = Number(localStorage.getItem("bibleCompanion_activeTabId"));
+    const savedNextId = Number(localStorage.getItem("bibleCompanion_nextTabId"));
+    if (data && Array.isArray(data) && data.length > 0) {
+      tabs = data.map(d => ({
+        id: d.id,
+        book: d.book,
+        chapter: d.chapter,
+        selectedVerses: new Set(),
+        aiResponse: "",
+        aiStatus: "",
+        aiTitle: "AI Commentary",
+        intent: "commentary",
+      }));
+      nextTabId = savedNextId || (Math.max(...tabs.map(t => t.id)) + 1);
+      const restoreId = savedActiveId && tabs.find(t => t.id === savedActiveId) ? savedActiveId : tabs[0].id;
+      switchToTab(restoreId);
+      return true;
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return false;
+}
+
+/* --- End Tabs --- */
 
 /* --- Theme --- */
 
@@ -151,7 +302,10 @@ async function startApp() {
 
   const success = await loadBibleData();
   if (success) {
-    renderChapter();
+    const restored = loadTabsFromStorage();
+    if (!restored) {
+      createTab("Genesis", 1);
+    }
   } else {
     document.getElementById("verse-container").innerHTML =
       '<p class="selection-hint">Failed to load Bible data. Check that data/bsb-strongs.json is accessible.</p>';
@@ -163,15 +317,90 @@ async function startApp() {
 // --- Navigation ---
 
 function populateBookSelect() {
-  const bookSelect = document.getElementById("book-select");
-  for (const book of getBooks()) {
-    const opt = document.createElement("option");
-    opt.value = book;
-    opt.textContent = book;
-    bookSelect.appendChild(opt);
+  const trigger = document.getElementById("book-select");
+  const otColumn = document.getElementById("ot-column");
+  const ntColumn = document.getElementById("nt-column");
+  const panel = document.querySelector(".book-dropdown-panel");
+
+  otColumn.innerHTML = '<div class="book-testament-title">Old Testament</div>';
+  ntColumn.innerHTML = '<div class="book-testament-title">New Testament</div>';
+
+  for (const book of getOldTestament()) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "book-item";
+    btn.textContent = book;
+    btn.dataset.book = book;
+    btn.addEventListener("click", () => selectBook(book));
+    otColumn.appendChild(btn);
   }
-  bookSelect.value = getCurrentBook();
+
+  for (const book of getNewTestament()) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "book-item";
+    btn.textContent = book;
+    btn.dataset.book = book;
+    btn.addEventListener("click", () => selectBook(book));
+    ntColumn.appendChild(btn);
+  }
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isExpanded = trigger.getAttribute("aria-expanded") === "true";
+    trigger.setAttribute("aria-expanded", String(!isExpanded));
+    panel.classList.toggle("open", !isExpanded);
+  });
+
+  trigger.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      trigger.click();
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!document.getElementById("book-dropdown").contains(e.target)) {
+      trigger.setAttribute("aria-expanded", "false");
+      panel.classList.remove("open");
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      trigger.setAttribute("aria-expanded", "false");
+      panel.classList.remove("open");
+    }
+  });
+
+  updateBookTrigger();
   updateChapterSelect();
+}
+
+function updateBookTrigger() {
+  const trigger = document.getElementById("book-select");
+  if (trigger) trigger.textContent = getCurrentBook();
+}
+
+function selectBook(book) {
+  setCurrentBook(book);
+  setCurrentChapter(1);
+  const tab = getActiveTab();
+  if (tab) {
+    tab.book = book;
+    tab.chapter = 1;
+  }
+  updateBookTrigger();
+  updateChapterSelect();
+  const chapterSelect = document.getElementById("chapter-select");
+  if (chapterSelect) chapterSelect.value = 1;
+  renderChapter();
+  if (tab) saveTabsToStorage();
+
+  const trigger = document.getElementById("book-select");
+  const panel = document.querySelector(".book-dropdown-panel");
+  trigger.setAttribute("aria-expanded", "false");
+  panel.classList.remove("open");
 }
 
 function updateChapterSelect() {
@@ -191,37 +420,47 @@ function updateChapterSelect() {
 }
 
 function bindNavigationEvents() {
-  const bookSelect = document.getElementById("book-select");
   const chapterSelect = document.getElementById("chapter-select");
   const prevBtn = document.getElementById("prev-chapter");
   const nextBtn = document.getElementById("next-chapter");
 
-  bookSelect.addEventListener("change", () => {
-    setCurrentBook(bookSelect.value);
-    setCurrentChapter(1);
-    updateChapterSelect();
-    renderChapter();
-  });
-
   chapterSelect.addEventListener("change", () => {
-    setCurrentChapter(Number(chapterSelect.value));
+    const tab = getActiveTab();
+    if (!tab) return;
+    tab.chapter = Number(chapterSelect.value);
+    setCurrentChapter(tab.chapter);
     renderChapter();
+    saveTabsToStorage();
   });
 
   prevBtn.addEventListener("click", () => {
-    goPrevChapter();
-    bookSelect.value = getCurrentBook();
+    const tab = getActiveTab();
+    if (!tab) return;
+    const result = goPrevChapter(tab.book, tab.chapter);
+    tab.book = result.book;
+    tab.chapter = result.chapter;
+    setCurrentBook(tab.book);
+    setCurrentChapter(tab.chapter);
+    updateBookTrigger();
     updateChapterSelect();
-    chapterSelect.value = getCurrentChapter();
+    chapterSelect.value = tab.chapter;
     renderChapter();
+    saveTabsToStorage();
   });
 
   nextBtn.addEventListener("click", () => {
-    goNextChapter();
-    bookSelect.value = getCurrentBook();
+    const tab = getActiveTab();
+    if (!tab) return;
+    const result = goNextChapter(tab.book, tab.chapter);
+    tab.book = result.book;
+    tab.chapter = result.chapter;
+    setCurrentBook(tab.book);
+    setCurrentChapter(tab.chapter);
+    updateBookTrigger();
     updateChapterSelect();
-    chapterSelect.value = getCurrentChapter();
+    chapterSelect.value = tab.chapter;
     renderChapter();
+    saveTabsToStorage();
   });
 }
 
@@ -229,8 +468,10 @@ function bindNavigationEvents() {
 
 function renderChapter() {
   const container = document.getElementById("verse-container");
-  const items = getChapterItems(getCurrentBook(), getCurrentChapter());
-  selectedVerses.clear();
+  const tab = getActiveTab();
+  if (!tab) return;
+  const items = getChapterItems(tab.book, tab.chapter);
+  tab.selectedVerses.clear();
   updateSendButtonState();
 
   if (!items || items.length === 0) {
@@ -242,7 +483,7 @@ function renderChapter() {
 
   const chapterHeading = document.createElement("div");
   chapterHeading.className = "chapter-heading";
-  chapterHeading.textContent = `${getCurrentBook()} ${getCurrentChapter()}`;
+  chapterHeading.textContent = `${tab.book} ${tab.chapter}`;
   container.appendChild(chapterHeading);
 
   const textBlock = document.createElement("div");
@@ -357,9 +598,11 @@ function setupVerseSelection(container) {
     e.preventDefault();
     const clickedIndex = Number(verse.dataset.verse);
     const allVerses = container.querySelectorAll(".verse");
+    const tab = getActiveTab();
+    if (!tab) return;
 
     if (e.shiftKey && lastClickedVerse !== null) {
-      selectedVerses.clear();
+      tab.selectedVerses.clear();
       allVerses.forEach((v) => v.classList.remove("selected"));
 
       const start = Math.min(lastClickedVerse, clickedIndex);
@@ -367,23 +610,23 @@ function setupVerseSelection(container) {
       allVerses.forEach((v) => {
         const vi = Number(v.dataset.verse);
         if (vi >= start && vi <= end) {
-          selectedVerses.add(vi);
+          tab.selectedVerses.add(vi);
           v.classList.add("selected");
         }
       });
     } else if (e.ctrlKey || e.metaKey) {
       const vi = clickedIndex;
-      if (selectedVerses.has(vi)) {
-        selectedVerses.delete(vi);
+      if (tab.selectedVerses.has(vi)) {
+        tab.selectedVerses.delete(vi);
         verse.classList.remove("selected");
       } else {
-        selectedVerses.add(vi);
+        tab.selectedVerses.add(vi);
         verse.classList.add("selected");
       }
     } else {
-      selectedVerses.clear();
+      tab.selectedVerses.clear();
       allVerses.forEach((v) => v.classList.remove("selected"));
-      selectedVerses.add(clickedIndex);
+      tab.selectedVerses.add(clickedIndex);
       verse.classList.add("selected");
     }
 
@@ -393,9 +636,9 @@ function setupVerseSelection(container) {
 }
 
 function getSelectedText() {
-  const book = getCurrentBook();
-  const chapter = getCurrentChapter();
-  const verses = getChapter(book, chapter);
+  const tab = getActiveTab();
+  if (!tab) return "";
+  const verses = getChapter(tab.book, tab.chapter);
   if (!verses || !verses.length) return "";
 
   const verseMap = {};
@@ -403,7 +646,7 @@ function getSelectedText() {
     verseMap[v.number] = v.text;
   }
 
-  const sortedSelection = Array.from(selectedVerses).sort((a, b) => a - b);
+  const sortedSelection = Array.from(tab.selectedVerses).sort((a, b) => a - b);
   const parts = [];
   for (const v of sortedSelection) {
     const text = verseMap[v];
@@ -411,12 +654,13 @@ function getSelectedText() {
       parts.push(`Verse ${v}: ${text}`);
     }
   }
-  return `${formatReference(book, chapter, "")}\n\n${parts.join("\n")}`;
+  return `${formatReference(tab.book, tab.chapter, "")}\n\n${parts.join("\n")}`;
 }
 
 function updateSendButtonState() {
   const btn = document.getElementById("send-to-ai");
-  btn.disabled = selectedVerses.size === 0;
+  const tab = getActiveTab();
+  btn.disabled = !tab || tab.selectedVerses.size === 0;
 }
 
 // --- LLM Integration ---
@@ -429,15 +673,33 @@ function bindKeyboardShortcuts() {
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
-      if (selectedVerses.size > 0) {
+      const tab = getActiveTab();
+      if (tab && tab.selectedVerses.size > 0) {
         sendToAI();
+      }
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "t") {
+      e.preventDefault();
+      const active = getActiveTab();
+      createTab(active ? active.book : "Genesis", active ? active.chapter : 1);
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "w") {
+      e.preventDefault();
+      if (activeTabId) closeTab(activeTabId);
+    }
+    if ((e.altKey) && e.key >= "1" && e.key <= "9") {
+      e.preventDefault();
+      const idx = Number(e.key) - 1;
+      if (idx < tabs.length) {
+        switchToTab(tabs[idx].id);
       }
     }
   });
 }
 
 async function sendToAI() {
-  if (isLoading || selectedVerses.size === 0) return;
+  const tab = getActiveTab();
+  if (isLoading || !tab || tab.selectedVerses.size === 0) return;
 
   const provider = getActiveProvider();
   if (!provider) return;
@@ -452,9 +714,12 @@ async function sendToAI() {
   const promptString = INTENT_PROMPTS[intent] || INTENT_PROMPTS[DEFAULT_INTENT];
   const finalPrompt = `${promptString}\n\nHere is the text to analyze:\n"${selectedText}"`;
 
+  tab.intent = intent;
+
   responseEl.innerHTML = `<span class="loading-spinner"></span> Loading ${intentLabel}...`;
   statusEl.textContent = "Requesting...";
   document.querySelector("#ai-header h2").textContent = `AI: ${intentLabel}`;
+  tab.aiTitle = `AI: ${intentLabel}`;
 
   const requestBody = {
     model: provider.model,
@@ -500,6 +765,8 @@ async function sendToAI() {
 
       responseEl.innerHTML = `<p style="color: var(--error);">${escapeHtml(errMsg)}</p>`;
       statusEl.textContent = "Error";
+      tab.aiResponse = responseEl.innerHTML;
+      tab.aiStatus = "Error";
       return;
     }
 
@@ -514,6 +781,7 @@ async function sendToAI() {
 
       responseEl.innerHTML = "";
       statusEl.textContent = "Streaming...";
+      tab.aiStatus = "Streaming...";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -548,6 +816,8 @@ async function sendToAI() {
         responseEl.innerHTML = '<p class="selection-hint">Received empty response from API.</p>';
       }
 
+      tab.aiResponse = responseEl.innerHTML;
+      tab.aiStatus = "Response ready";
       statusEl.textContent = "Response ready";
     } else {
       const json = await response.json();
@@ -557,6 +827,8 @@ async function sendToAI() {
       } else {
         responseEl.innerHTML = '<p class="selection-hint">Received empty response from API.</p>';
       }
+      tab.aiResponse = responseEl.innerHTML;
+      tab.aiStatus = "Response ready";
       statusEl.textContent = "Response ready";
     }
 
@@ -570,6 +842,8 @@ async function sendToAI() {
 
     responseEl.innerHTML = `<p style="color: var(--error);">${escapeHtml(displayMsg)}</p>`;
     statusEl.textContent = "Error";
+    tab.aiResponse = responseEl.innerHTML;
+    tab.aiStatus = "Error";
   } finally {
     isLoading = false;
   }

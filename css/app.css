@@ -169,8 +169,111 @@ header#app-header {
 
 /* --- Main Content / Split Layout --- */
 
+/* --- Tab Bar --- */
+
+#tab-bar {
+  display: flex;
+  align-items: stretch;
+  background: var(--parchment);
+  border-bottom: 2px solid var(--border-dark);
+  flex-shrink: 0;
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 34px;
+}
+
+#tab-bar::-webkit-scrollbar {
+  height: 0;
+}
+
+.tab-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  color: var(--text-secondary);
+  background: var(--parchment-dark);
+  border-top: 2px solid var(--bevel-light);
+  border-left: 1px solid var(--bevel-light);
+  border-right: 1px solid var(--bevel-dark);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.1s, background 0.1s;
+}
+
+.tab-item.active {
+  background: var(--bible-bg);
+  color: var(--text-primary);
+  font-weight: 700;
+  border-top: 3px solid var(--gold);
+  border-bottom: none;
+  box-shadow: inset 0 -2px 0 var(--border-dark);
+}
+
+.tab-item:not(.active):hover {
+  background: var(--parchment);
+  color: var(--gold-light);
+}
+
+.tab-item:not(.active):active {
+  border-top: 2px solid var(--bevel-dark);
+  border-left: 1px solid var(--bevel-dark);
+  border-right: 1px solid var(--bevel-light);
+}
+
+.tab-title {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-close {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.1rem;
+  font-weight: 700;
+}
+
+.tab-close:hover {
+  color: var(--error);
+}
+
+.tab-item:hover .tab-close {
+  display: inline;
+}
+
+.tab-item.active .tab-close {
+  display: inline;
+}
+
+#add-tab-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin: 2px 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0;
+}
+
+/* --- Main Content / Split Layout --- */
+
 #main-content {
   display: flex;
+  flex-direction: column;
   flex: 1;
   overflow: hidden;
 }
@@ -180,6 +283,7 @@ header#app-header {
   flex-direction: row;
   flex: 1;
   overflow: hidden;
+  min-height: 0;
 }
 
 /* --- Splitter --- */
@@ -282,6 +386,110 @@ header#app-header {
 
 .nav-group select:focus {
   outline: 1px dotted var(--burgundy);
+}
+
+/* --- Book Dropdown --- */
+
+.book-dropdown {
+  position: relative;
+  min-width: 140px;
+}
+
+.book-select-trigger {
+  background: var(--bible-bg);
+  border-top: 2px solid var(--bevel-dark);
+  border-left: 2px solid var(--bevel-dark);
+  border-bottom: 2px solid var(--bevel-light);
+  border-right: 2px solid var(--bevel-light);
+  color: var(--text-primary);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+}
+
+.book-select-trigger:focus {
+  outline: 1px dotted var(--burgundy);
+}
+
+.book-select-trigger::after {
+  content: "\25BC";
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.book-dropdown-panel {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  background: var(--parchment);
+  border-top: 2px solid var(--bevel-dark);
+  border-left: 2px solid var(--bevel-dark);
+  border-bottom: 2px solid var(--bevel-light);
+  border-right: 2px solid var(--bevel-light);
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.25);
+  padding: 0.25rem;
+  gap: 0.25rem;
+  flex-direction: row;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.book-dropdown-panel.open {
+  display: flex;
+}
+
+.book-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 145px;
+  flex-shrink: 0;
+}
+
+.book-testament-title {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  font-weight: 700;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  padding: 0.25rem 0.4rem;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 0.15rem;
+  user-select: none;
+}
+
+.book-item {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  padding: 0.15rem 0.4rem;
+  font-size: 0.8rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.book-item:hover {
+  background: var(--accent-light);
+  border-color: var(--border-light);
+}
+
+.book-item:active {
+  background: var(--accent);
+  color: #fff;
 }
 
 .nav-actions {
@@ -1145,6 +1353,32 @@ header#app-header {
   outline: 2px solid var(--burgundy);
 }
 
+[data-theme="modern"] .book-select-trigger {
+  border-top: 1px solid var(--border-light);
+  border-left: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+  border-right: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+[data-theme="modern"] .book-dropdown-panel {
+  border-top: 1px solid var(--border-dark);
+  border-left: 1px solid var(--border-dark);
+  border-bottom: 1px solid var(--border-light);
+  border-right: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="modern"] .book-testament-title {
+  border-bottom-color: var(--border-light);
+}
+
+[data-theme="modern"] .book-item:hover {
+  background: var(--accent-light);
+  border-radius: 4px;
+}
+
 [data-theme="modern"] #verse-container::-webkit-scrollbar,
 [data-theme="modern"] #ai-response::-webkit-scrollbar {
   width: 8px;
@@ -1204,6 +1438,38 @@ header#app-header {
   border-radius: 6px;
 }
 
+/* --- Modern Theme Tab Bar --- */
+
+[data-theme="modern"] #tab-bar {
+  border-bottom: 1px solid var(--border-light);
+}
+
+[data-theme="modern"] .tab-item {
+  border: 1px solid var(--border-light);
+  border-radius: 8px 8px 0 0;
+  border-top-width: 3px;
+  margin: 2px 2px 0;
+}
+
+[data-theme="modern"] .tab-item.active {
+  border-top-color: var(--gold);
+  border-bottom-color: transparent;
+  margin-bottom: 0;
+}
+
+[data-theme="modern"] .tab-item:not(.active):active {
+  border: 1px solid var(--border-dark);
+}
+
+[data-theme="modern"] #add-tab-btn {
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+[data-theme="modern"] #add-tab-btn:active {
+  border: 1px solid var(--border-dark);
+}
+
 /* --- Responsive --- */
 
 @media (max-width: 768px) {
@@ -1213,6 +1479,19 @@ header#app-header {
 
   #splitter {
     display: none;
+  }
+
+  #tab-bar {
+    min-height: 30px;
+  }
+
+  .tab-item {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .tab-title {
+    max-width: 100px;
   }
 
   #bible-reader {
@@ -1239,6 +1518,10 @@ header#app-header {
 
   .nav-group select {
     min-width: 100px;
+  }
+
+  .book-column {
+    width: 130px;
   }
 
   #verse-container {

@@ -1,18 +1,23 @@
 // Bible data loader and navigation logic
 
-const BOOK_ORDER = [
+const OLD_TESTAMENT = [
   "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
   "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel",
   "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther",
   "Job", "Psalms", "Proverbs", "Ecclesiastes", "Song of Solomon",
   "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel",
   "Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi",
+];
+
+const NEW_TESTAMENT = [
   "Matthew", "Mark", "Luke", "John", "Acts",
   "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians",
   "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians",
   "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews",
   "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Revelation"
 ];
+
+const BOOK_ORDER = [...OLD_TESTAMENT, ...NEW_TESTAMENT];
 
 const CHAPER_PER_BOOK = {
   "Genesis": 50, "Exodus": 40, "Leviticus": 27, "Numbers": 36, "Deuteronomy": 34,
@@ -55,6 +60,14 @@ export function isLoaded() {
 
 export function getBooks() {
   return BOOK_ORDER;
+}
+
+export function getOldTestament() {
+  return OLD_TESTAMENT;
+}
+
+export function getNewTestament() {
+  return NEW_TESTAMENT;
 }
 
 export function getChaptersForBook(book) {
@@ -109,27 +122,30 @@ export function formatReference(book, chapter, verse) {
   return `${book} ${chapter}:${verse}`;
 }
 
-export function goNextChapter() {
-  const maxChapters = getChaptersForBook(currentBook);
-  if (currentChapter < maxChapters) {
-    currentChapter++;
+export function goNextChapter(book, chapter) {
+  const maxChapters = getChaptersForBook(book);
+  if (chapter < maxChapters) {
+    return { book, chapter: chapter + 1 };
   } else {
-    const bookIndex = BOOK_ORDER.indexOf(currentBook);
+    const bookIndex = BOOK_ORDER.indexOf(book);
     if (bookIndex < BOOK_ORDER.length - 1) {
-      currentBook = BOOK_ORDER[bookIndex + 1];
-      currentChapter = 1;
+      return { book: BOOK_ORDER[bookIndex + 1], chapter: 1 };
     }
   }
+  return { book, chapter };
 }
 
-export function goPrevChapter() {
-  if (currentChapter > 1) {
-    currentChapter--;
+export function goPrevChapter(book, chapter) {
+  if (chapter > 1) {
+    return { book, chapter: chapter - 1 };
   } else {
-    const bookIndex = BOOK_ORDER.indexOf(currentBook);
+    const bookIndex = BOOK_ORDER.indexOf(book);
     if (bookIndex > 0) {
-      currentBook = BOOK_ORDER[bookIndex - 1];
-      currentChapter = getChaptersForBook(currentBook);
+      const prevBook = BOOK_ORDER[bookIndex - 1];
+      return { book: prevBook, chapter: getChaptersForBook(prevBook) };
     }
   }
+  return { book, chapter };
 }
+
+

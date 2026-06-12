@@ -25,12 +25,19 @@
     </header>
 
     <main id="main-content">
+      <div id="tab-bar"></div>
       <div id="split-container">
         <section id="bible-reader">
           <nav id="navigation-bar">
             <div class="nav-group">
               <label for="book-select">Book</label>
-              <select id="book-select"></select>
+              <div id="book-dropdown" class="book-dropdown">
+                <button type="button" id="book-select" class="book-select-trigger" aria-haspopup="listbox" aria-expanded="false"></button>
+                <div class="book-dropdown-panel" role="listbox">
+                  <div class="book-column" id="ot-column"></div>
+                  <div class="book-column" id="nt-column"></div>
+                </div>
+              </div>
             </div>
             <div class="nav-group chapter-nav">
               <label for="chapter-select">Chapter</label>
