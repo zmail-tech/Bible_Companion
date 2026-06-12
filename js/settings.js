@@ -4,18 +4,44 @@ const STORAGE_KEY = "bibleCompanion_settings";
 const MODELS_STORAGE_KEY = "bibleCompanion_models";
 
 const DEFAULT_SETTINGS = {
-  endpoint: "https://api.openai.com/v1/chat/completions",
-  apiKey: "",
-  model: "gpt-4o"
+  providers: [
+    {
+      id: "default",
+      name: "Default Provider",
+      endpoint: "https://api.openai.com/v1/chat/completions",
+      apiKey: "",
+      model: "gpt-4o"
+    }
+  ],
+  activeProviderId: "default"
 };
 
-let settings = { ...DEFAULT_SETTINGS };
+let settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 let availableModels = [];
 
-window.settings = null;
+function migrateOldSettings(oldSettings) {
+  if (!oldSettings || !oldSettings.endpoint) return null;
+  return {
+    providers: [{
+      id: "default",
+      name: "Default Provider",
+      endpoint: oldSettings.endpoint,
+      apiKey: oldSettings.apiKey || "",
+      model: oldSettings.model || "gpt-4o"
+    }],
+    activeProviderId: "default"
+  };
+}
+
+function isNewFormat(data) {
+  return data && Array.isArray(data.providers) && data.providers.length > 0;
+}
 
 window.loadSettings = function(s) {
-  settings = s || { ...DEFAULT_SETTINGS };
+  if (s && !isNewFormat(s)) {
+    s = migrateOldSettings(s);
+  }
+  settings = s || JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
   window.settings = settings;
   console.log("[settings] window.loadSettings called with:", s);
   console.log("[settings] window.loadSettings - storage key:", STORAGE_KEY);
@@ -25,12 +51,22 @@ export function getSettings() {
   return { ...settings };
 }
 
+export function getActiveProvider() {
+  return getProviderById(settings.activeProviderId) || settings.providers[0] || null;
+}
+
+export function getProviderById(id) {
+  return settings.providers.find(p => p.id === id) || null;
+}
+
 export function setApiKey(key) {
-  settings.apiKey = key;
+  const provider = getActiveProvider();
+  if (provider) provider.apiKey = key;
 }
 
 export function clearApiKey() {
-  settings.apiKey = "";
+  const provider = getActiveProvider();
+  if (provider) provider.apiKey = "";
 }
 
 export function loadSettingsLocally() {
@@ -42,6 +78,9 @@ export function loadSettingsLocally() {
     if (raw) {
       const parsed = JSON.parse(raw);
       console.log("[settings] loadSettingsLocally: parsed =", parsed);
+      if (!isNewFormat(parsed)) {
+        return migrateOldSettings(parsed);
+      }
       return parsed;
     }
   } catch (e) {
@@ -124,11 +163,26 @@ function switchToInputMode() {
 function saveModelFromUI() {
   const select = document.getElementById("model-select");
   const input = document.getElementById("model-name");
-  if (select.style.display !== "none" && select.value) {
-    settings.model = select.value;
-  } else if (input.style.display !== "none" && input.value.trim()) {
-    settings.model = input.value.trim();
+  const provider = getProviderById(document.getElementById("provider-select").value);
+  if (provider) {
+    if (select.style.display !== "none" && select.value) {
+      provider.model = select.value;
+    } else if (input.style.display !== "none" && input.value.trim()) {
+      provider.model = input.value.trim();
+    }
   }
+}
+
+function getSavedModel() {
+  const select = document.getElementById("model-select");
+  const input = document.getElementById("model-name");
+  if (select.style.display !== "none" && select.value) {
+    return select.value;
+  }
+  if (input.style.display !== "none" && input.value.trim()) {
+    return input.value.trim();
+  }
+  return null;
 }
 
 function loadCachedModels() {
@@ -141,7 +195,14 @@ function loadCachedModels() {
 
 function cacheModels(endpoint, models) {
   try {
-    localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify({ endpoint, models }));
+    let store = {};
+    const raw = localStorage.getItem(MODELS_STORAGE_KEY);
+    if (raw) {
+      try { store = JSON.parse(raw); } catch {}
+    }
+    if (typeof store !== "object" || Array.isArray(store)) store = {};
+    store[endpoint] = models;
+    localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(store));
   } catch {}
 }
 
@@ -149,6 +210,63 @@ function clearCachedModels() {
   try {
     localStorage.removeItem(MODELS_STORAGE_KEY);
   } catch {}
+}
+
+function getCachedModelsForEndpoint(endpoint) {
+  const store = loadCachedModels();
+  if (store && typeof store === "object" && !Array.isArray(store)) {
+    return store[endpoint] || null;
+  }
+  // Legacy single-endpoint cache
+  if (store && store.endpoint === endpoint) {
+    return store.models || null;
+  }
+  return null;
+}
+
+function addProvider(data) {
+  const id = data.id || `provider_${Date.now()}`;
+  const provider = {
+    id,
+    name: data.name || "New Provider",
+    endpoint: data.endpoint || "",
+    apiKey: data.apiKey || "",
+    model: data.model || "gpt-4o"
+  };
+  settings.providers.push(provider);
+  settings.activeProviderId = id;
+  saveSettingsLocally();
+  return provider;
+}
+
+function deleteProvider(id) {
+  if (settings.providers.length <= 1) return false;
+  const idx = settings.providers.findIndex(p => p.id === id);
+  if (idx === -1) return false;
+  settings.providers.splice(idx, 1);
+  if (settings.activeProviderId === id) {
+    settings.activeProviderId = settings.providers[0]?.id || null;
+  }
+  saveSettingsLocally();
+  return true;
+}
+
+function updateProvider(id, data) {
+  const provider = getProviderById(id);
+  if (!provider) return false;
+  if (data.endpoint !== undefined) provider.endpoint = data.endpoint;
+  if (data.apiKey !== undefined) provider.apiKey = data.apiKey;
+  if (data.model !== undefined) provider.model = data.model;
+  if (data.name !== undefined) provider.name = data.name;
+  saveSettingsLocally();
+  return true;
+}
+
+function setActiveProvider(id) {
+  if (getProviderById(id)) {
+    settings.activeProviderId = id;
+    saveSettingsLocally();
+  }
 }
 
 function initSettingsModal() {
@@ -159,6 +277,8 @@ function initSettingsModal() {
   const form = document.getElementById("settings-form");
   const resetBtn = document.getElementById("reset-settings");
 
+  const providerSelect = document.getElementById("provider-select");
+  const providerNameInput = document.getElementById("provider-name");
   const endpointInput = document.getElementById("endpoint-url");
   const apiKeyInput = document.getElementById("api-key");
   const modelInput = document.getElementById("model-name");
@@ -166,35 +286,62 @@ function initSettingsModal() {
   const themeSelect = document.getElementById("theme-select");
   const statusEl = document.getElementById("connection-status");
   const fetchModelsBtn = document.getElementById("fetch-models-btn");
+  const addProviderBtn = document.getElementById("add-provider-btn");
+  const deleteProviderBtn = document.getElementById("delete-provider-btn");
 
-  function openModal() {
-    endpointInput.value = settings.endpoint;
-    modelInput.value = settings.model;
-    statusEl.className = "status-message";
-    statusEl.textContent = "";
-    const savedTheme = localStorage.getItem("bibleCompanion_theme") || "light";
-    themeSelect.value = savedTheme;
+  function populateProviderDropdown() {
+    providerSelect.innerHTML = "";
+    for (const p of settings.providers) {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      if (p.id === settings.activeProviderId) opt.selected = true;
+      providerSelect.appendChild(opt);
+    }
+  }
 
-    if (settings.apiKey) {
+  function getSelectedProvider() {
+    return getProviderById(providerSelect.value);
+  }
+
+  function populateFormFromProvider(provider) {
+    if (!provider) return;
+    providerNameInput.value = provider.name;
+    endpointInput.value = provider.endpoint;
+    if (provider.apiKey) {
       apiKeyInput.value = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
       apiKeyInput.dataset.hasKey = "true";
     } else {
       apiKeyInput.value = "";
       apiKeyInput.dataset.hasKey = "false";
     }
-
-    const cached = loadCachedModels();
-    if (cached && cached.endpoint === settings.endpoint && cached.models && cached.models.length > 0) {
-      populateModelSelect(cached.models);
-      modelSelect.value = settings.model;
+    const cached = getCachedModelsForEndpoint(provider.endpoint);
+    if (cached && cached.length > 0) {
+      populateModelSelect(cached);
+      modelSelect.value = provider.model;
       switchToSelectMode();
     } else {
       switchToInputMode();
-      modelInput.value = settings.model;
+      modelInput.value = provider.model;
     }
+  }
 
+  function updateDeleteButtonState() {
+    deleteProviderBtn.disabled = settings.providers.length <= 1;
+  }
+
+  function openModal() {
+    populateProviderDropdown();
+    const active = getActiveProvider();
+    populateFormFromProvider(active);
+    statusEl.className = "status-message";
+    statusEl.textContent = "";
+    const savedTheme = localStorage.getItem("bibleCompanion_theme") || "light";
+    themeSelect.value = savedTheme;
+    updateDeleteButtonState();
     modal.classList.add("active");
-    endpointInput.focus();
+    providerSelect.focus();
+    if (window.updateProviderStatus) window.updateProviderStatus();
   }
 
   function closeModal() {
@@ -222,11 +369,49 @@ function initSettingsModal() {
     }
   }
 
+  providerSelect.addEventListener("change", () => {
+    const provider = getSelectedProvider();
+    if (provider) {
+      setActiveProvider(provider.id);
+      populateFormFromProvider(provider);
+    }
+    updateDeleteButtonState();
+    if (window.updateProviderStatus) window.updateProviderStatus();
+  });
+
+  addProviderBtn.addEventListener("click", () => {
+    const newProvider = addProvider({ name: "New Provider" });
+    populateProviderDropdown();
+    populateFormFromProvider(newProvider);
+    providerSelect.value = newProvider.id;
+    updateDeleteButtonState();
+    setStatus("New provider added. Fill in the details and save.", "success");
+    if (window.updateProviderStatus) window.updateProviderStatus();
+  });
+
+  deleteProviderBtn.addEventListener("click", () => {
+    const provider = getSelectedProvider();
+    if (!provider) return;
+    if (settings.providers.length <= 1) {
+      setStatus("Cannot delete the last provider.", "error");
+      return;
+    }
+    const wasActive = provider.id === settings.activeProviderId;
+    deleteProvider(provider.id);
+    populateProviderDropdown();
+    const newActive = getActiveProvider();
+    populateFormFromProvider(newActive);
+    updateDeleteButtonState();
+    setStatus(`Provider "${provider.name}" deleted.`, "success");
+    if (window.updateProviderStatus) window.updateProviderStatus();
+  });
+
   fetchModelsBtn.addEventListener("click", async () => {
-    const currentEndpoint = endpointInput.value.trim() || settings.endpoint;
+    const currentEndpoint = endpointInput.value.trim();
     const rawApiKey = apiKeyInput.value;
     const useExistingKey = apiKeyInput.dataset.hasKey === "true";
-    const actualApiKey = useExistingKey ? settings.apiKey : rawApiKey;
+    const provider = getSelectedProvider();
+    const actualApiKey = useExistingKey ? (provider?.apiKey || "") : rawApiKey;
 
     if (!currentEndpoint) {
       setStatus("Please enter an endpoint URL first.", "error");
@@ -242,12 +427,12 @@ function initSettingsModal() {
     if (models && models.length > 0) {
       cacheModels(currentEndpoint, models);
       populateModelSelect(models);
-      modelSelect.value = settings.model;
+      if (provider) modelSelect.value = provider.model;
       switchToSelectMode();
       setStatus(`Found ${models.length} models.`, "success");
     } else {
       switchToInputMode();
-      modelInput.value = settings.model;
+      if (provider) modelInput.value = provider.model;
       setStatus("Could not fetch models. Enter a model name manually.", "error");
     }
   });
@@ -277,8 +462,9 @@ function initSettingsModal() {
   });
 
   modelSelect.addEventListener("change", () => {
-    if (modelSelect.value) {
-      settings.model = modelSelect.value;
+    const provider = getSelectedProvider();
+    if (provider && modelSelect.value) {
+      provider.model = modelSelect.value;
     }
   });
 
@@ -287,15 +473,14 @@ function initSettingsModal() {
   });
 
   resetBtn.addEventListener("click", () => {
-    settings = { ...DEFAULT_SETTINGS };
+    settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     availableModels = [];
     clearCachedModels();
     saveSettingsLocally();
-    endpointInput.value = settings.endpoint;
-    apiKeyInput.value = "";
-    apiKeyInput.dataset.hasKey = "false";
-    modelInput.value = settings.model;
-    switchToInputMode();
+    populateProviderDropdown();
+    const active = getActiveProvider();
+    populateFormFromProvider(active);
+    updateDeleteButtonState();
     setStatus("Settings reset to defaults.", "success");
   });
 
@@ -308,7 +493,8 @@ function initSettingsModal() {
     saveModelFromUI();
 
     const useExistingKey = apiKeyInput.dataset.hasKey === "true";
-    const actualApiKey = useExistingKey ? settings.apiKey : rawApiKey;
+    const provider = getSelectedProvider();
+    const actualApiKey = useExistingKey ? (provider?.apiKey || "") : rawApiKey;
 
     if (!newEndpoint) {
       setStatus("Endpoint URL is required.", "error");
@@ -316,20 +502,24 @@ function initSettingsModal() {
       return;
     }
 
-    settings.endpoint = newEndpoint;
-    settings.model = settings.model || DEFAULT_SETTINGS.model;
-    settings.apiKey = actualApiKey;
-
-    saveSettingsLocally();
+    if (provider) {
+      updateProvider(provider.id, {
+        name: providerNameInput.value.trim() || "Unnamed Provider",
+        endpoint: newEndpoint,
+        apiKey: actualApiKey,
+        model: getSavedModel()
+      });
+    }
 
     setStatus("Testing connection...", "");
-    const isConnected = await validateConnection(newEndpoint, settings.apiKey);
+    const isConnected = await validateConnection(newEndpoint, actualApiKey);
 
     if (isConnected) {
       setStatus("Settings saved. Connection successful.", "success");
     } else {
       setStatus("Settings saved, but connection test could not reach the endpoint. Check the URL and API key.", "warning");
     }
+    if (window.updateProviderStatus) window.updateProviderStatus();
   });
 }
 

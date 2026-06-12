@@ -20,7 +20,7 @@ Your purpose is to provide commentary on Bible passages.
 - **Accuracy:** Ensure responses are unbiased, positive, and accurate.`;
 
 import { loadBibleData, isLoaded, getBooks, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference, goNextChapter, goPrevChapter } from "./bible.js";
-import { getSettings, loadSettingsLocally } from "./settings.js";
+import { loadSettingsLocally, getActiveProvider } from "./settings.js";
 
 const INTENT_PROMPTS = {
   commentary: "Provide a detailed theological commentary on the selected passage. Use Southern Baptist theological perspectives and explain the text clearly.",
@@ -63,6 +63,15 @@ function initTheme() {
 }
 
 window.applyTheme = applyTheme;
+window.updateProviderStatus = updateProviderStatus;
+
+function updateProviderStatus() {
+  const provider = getActiveProvider();
+  const el = document.getElementById("provider-status");
+  if (!el || !provider) return;
+  el.innerHTML = `<span class="provider-status-dot"></span><span>${provider.name} / ${provider.model}</span>`;
+  el.title = `Provider: ${provider.name}\nModel: ${provider.model}`;
+}
 
 /* --- Splitter --- */
 
@@ -133,6 +142,7 @@ function initIntentSelector() {
 async function startApp() {
   initTheme();
   initSplitter();
+  updateProviderStatus();
   populateBookSelect();
   bindNavigationEvents();
   bindSendButton();
@@ -429,7 +439,8 @@ function bindKeyboardShortcuts() {
 async function sendToAI() {
   if (isLoading || selectedVerses.size === 0) return;
 
-  const settings = getSettings();
+  const provider = getActiveProvider();
+  if (!provider) return;
   const selectedText = getSelectedText();
   const responseEl = document.getElementById("ai-response");
   const statusEl = document.getElementById("ai-status");
@@ -446,7 +457,7 @@ async function sendToAI() {
   document.querySelector("#ai-header h2").textContent = `AI: ${intentLabel}`;
 
   const requestBody = {
-    model: settings.model,
+    model: provider.model,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: finalPrompt }
@@ -459,11 +470,11 @@ async function sendToAI() {
     const headers = {
       "Content-Type": "application/json"
     };
-    if (settings.apiKey) {
-      headers["Authorization"] = `Bearer ${settings.apiKey}`;
+    if (provider.apiKey) {
+      headers["Authorization"] = `Bearer ${provider.apiKey}`;
     }
 
-    const response = await fetch(settings.endpoint, {
+    const response = await fetch(provider.endpoint, {
       method: "POST",
       headers: { ...headers, "Accept": "text/event-stream" },
       body: JSON.stringify({ ...requestBody, stream: true })

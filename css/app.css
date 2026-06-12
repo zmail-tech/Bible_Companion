@@ -143,6 +143,30 @@ header#app-header {
   align-items: center;
 }
 
+.provider-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  color: var(--gold-light);
+  letter-spacing: 0.03em;
+  opacity: 0.85;
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.provider-status-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  display: inline-block;
+}
+
 /* --- Main Content / Split Layout --- */
 
 #main-content {
@@ -705,6 +729,45 @@ header#app-header {
   border-right: 2px solid var(--bevel-light);
 }
 
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: var(--error);
+  color: #fff;
+  border-top: 2px solid #c04040;
+  border-left: 2px solid #c04040;
+  border-bottom: 2px solid #801010;
+  border-right: 2px solid #801010;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.875rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-danger:active:not(:disabled) {
+  border-top: 2px solid #801010;
+  border-left: 2px solid #801010;
+  border-bottom: 2px solid #c04040;
+  border-right: 2px solid #c04040;
+}
+
+.provider-actions {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  justify-content: flex-start;
+}
+
 /* --- Modal --- */
 
 .modal {
@@ -940,7 +1003,8 @@ header#app-header {
 [data-theme="modern"] .icon-btn-models,
 [data-theme="modern"] .modal-header h2,
 [data-theme="modern"] #ai-header h2,
-[data-theme="modern"] #ai-status {
+[data-theme="modern"] #ai-status,
+[data-theme="modern"] .provider-status {
   font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -1004,6 +1068,15 @@ header#app-header {
 
 [data-theme="modern"] .btn-secondary:active {
   border: 1px solid var(--border-dark);
+}
+
+[data-theme="modern"] .btn-danger {
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+}
+
+[data-theme="modern"] .btn-danger:active:not(:disabled) {
+  border: 1px solid #801010;
 }
 
 [data-theme="modern"] .verse-paragraph:first-of-type .verse:first-of-type::first-letter {
@@ -1179,9 +1252,17 @@ header#app-header {
   #app-header h1 {
     font-size: 1.05rem;
   }
+
+  .provider-status {
+    max-width: 160px;
+  }
 }
 
 @media (max-width: 480px) {
+  .provider-status {
+    display: none;
+  }
+
   #app-header h1 {
     font-size: 0.95rem;
   }
