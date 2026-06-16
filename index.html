@@ -26,6 +26,16 @@
 
     <main id="main-content">
       <div id="tab-bar"></div>
+      <div id="prayer-mode-bar" class="prayer-mode-bar">
+        <button id="prayer-toggle-btn" class="icon-btn" aria-label="Prayer Companion" title="Prayer Companion">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 20h10"/>
+            <path d="M10 20c5.5-2.5.8-6.4 4-6.4 3.2 0-.5 3.4 3 3.4"/>
+            <path d="M12 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+          </svg>
+        </button>
+        <span class="prayer-status" id="prayer-status"></span>
+      </div>
       <div id="split-container">
         <section id="bible-reader">
           <nav id="navigation-bar">
@@ -81,6 +91,54 @@
         </section>
 
         <div id="splitter"></div>
+
+        <section id="prayer-editor" class="prayer-editor hidden">
+          <div id="prayer-toolbar">
+            <span class="prayer-toolbar-hint">Supported: # headings, **bold**, *italic*, - bullets, `code`, ```code blocks```\</span>
+            <select id="prayer-style-select" class="prayer-style-select">
+              <option value="concise" selected>Concise</option>
+              <option value="narrative">Narrative</option>
+              <option value="intercessory">Intercessory</option>
+            </select>
+            <button id="enhance-prayer-btn" class="btn-secondary enhance-btn" title="Enhance with AI">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v1m0 16v1m-9-9h1m16 0h1m-2.636-6.364l-.707.707M6.343 17.657l-.707.707M18.364 18.364l-.707-.707M6.343 6.343l-.707-.707"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              Enhance with AI
+            </button>
+            <button id="undo-prayer-btn" class="btn-secondary enhance-btn" title="Undo enhancement" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+              Undo
+            </button>
+          </div>
+          <div class="prayer-confidentiality-row">
+            <label for="prayer-confidentiality-note" class="prayer-confidentiality-label">Confidentiality note <span class="prayer-confidentiality-optional">(optional)</span></label>
+            <input type="text" id="prayer-confidentiality-note" class="prayer-confidentiality-input" placeholder="e.g. Keep names general for group sharing">
+          </div>
+          <div id="prayer-split-container" class="prayer-split-container">
+            <textarea id="prayer-textarea" class="prayer-textarea" placeholder="Write your prayer list here..."></textarea>
+            <div id="prayer-splitter" class="prayer-splitter"></div>
+            <div class="prayer-preview-container">
+              <h3 class="prayer-preview-title">Preview</h3>
+              <div id="prayer-preview" class="prayer-preview"></div>
+            </div>
+          </div>
+          <div class="prayer-footer">
+            <div id="prayer-signature" class="prayer-signature">— Bible Companion</div>
+            <button id="prayer-copy-btn" class="btn-secondary" title="Copy prayer text">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              Copy
+            </button>
+            <button id="prayer-save-btn" class="btn-secondary" title="Save prayer text">Save</button>
+          </div>
+        </section>
 
         <section id="ai-panel">
           <div id="ai-header">

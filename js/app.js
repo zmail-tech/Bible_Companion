@@ -33,11 +33,25 @@ const INTENT_PROMPTS = {
 };
 
 const DEFAULT_INTENT = "commentary";
+const PRAYER_STORAGE_KEY = "bibleCompanion_prayerCompanion";
+const PRAYER_SIGNATURE = "— Bible Companion";
+const PRAYER_STYLE_STORAGE_KEY = "bibleCompanion_prayerStyle";
+
+const PRAYER_SYSTEM_PROMPT = `You are a careful prayer editor. Your only job is to lightly edit the user's prayer request for clarity, grammar, spelling, punctuation, and sentence structure. You are NOT a content generator. Do not add facts, assumptions, new prayer targets, theological commentary, or explanations. Preserve the original meaning, names, details, and tone. Return only the refined prayer request text, with no surrounding commentary or meta-text.`;
+
+const PRAYER_ENHANCE_PROMPTS = {
+  concise: "Condense the prayer request into a brief, clear summary suitable for quick sharing. Keep it to a few sentences while preserving all names and key details. Use only hyphen bullets if listing multiple items.",
+  narrative: "Rewrite the prayer request as a flowing, contextual narrative that provides helpful background and setting. Keep all names and details intact. Do not invent new information or prayer targets.",
+  intercessory: "Restructure the prayer request into 3 distinct prayer points. Each point should have a clear focus area. Use only hyphen bullets to list the points. Keep all original names and details intact."
+};
+
+const DEFAULT_PRAYER_STYLE = "concise";
 
 let tabs = [];
 let activeTabId = null;
 let nextTabId = 1;
 let isLoading = false;
+let isPrayerMode = false;
 
 /* --- Tabs --- */
 
@@ -312,6 +326,8 @@ async function startApp() {
   }
 
   registerServiceWorker();
+  initPrayerEnhancementUI();
+  initPrayerMode();
 }
 
 // --- Navigation ---
@@ -851,6 +867,33 @@ async function sendToAI() {
 
 // --- Markdown Renderer ---
 
+function sanitizeHtml(html) {
+  const div = document.createElement("div");
+  div.innerHTML = html;
+
+  const scripts = div.querySelectorAll("script");
+  for (const script of scripts) {
+    script.remove();
+  }
+
+  const allElements = div.querySelectorAll("*");
+  for (const el of allElements) {
+    const attrs = Array.from(el.attributes);
+    for (const attr of attrs) {
+      if (attr.name.startsWith("on")) {
+        el.removeAttribute(attr.name);
+      } else if (attr.name === "href" || attr.name === "src") {
+        const val = attr.value;
+        if (val && val.toLowerCase().startsWith("javascript:")) {
+          el.removeAttribute(attr.name);
+        }
+      }
+    }
+  }
+
+  return div.innerHTML;
+}
+
 function renderMarkdown(text) {
   if (!text) return "";
 
@@ -869,6 +912,8 @@ function renderMarkdown(text) {
   html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
 
+  html = html.replace(/^\d+\. (.+)$/gm, "<li class=\"numbered\">$1</li>");
+  html = html.replace(/((?:<li class="numbered">.+<\/li>\n?)+)/g, "<ol class=\"numbered-list\">$1</ol>");
   html = html.replace(/^\- (.+)$/gm, "<li>$1</li>");
   html = html.replace(/((?:<li>.+<\/li>\n?)+)/g, "<ul>$1</ul>");
 
@@ -878,6 +923,8 @@ function renderMarkdown(text) {
   if (!html.startsWith("<")) {
     html = "<p>" + html + "</p>";
   }
+
+  html = sanitizeHtml(html);
 
   return html;
 }
@@ -900,6 +947,362 @@ function registerServiceWorker() {
         console.warn("Service worker registration failed:", err);
       });
   }
+}
+
+// --- Prayer Companion Mode ---
+
+function togglePrayerMode() {
+  isPrayerMode = !isPrayerMode;
+  const splitContainer = document.getElementById("split-container");
+  const bibleReader = document.getElementById("bible-reader");
+  const splitter = document.getElementById("splitter");
+  const navigationBar = document.getElementById("navigation-bar");
+  const aiPanel = document.getElementById("ai-panel");
+  const prayerEditor = document.getElementById("prayer-editor");
+  const prayerToggleBtn = document.getElementById("prayer-toggle-btn");
+
+  if (isPrayerMode) {
+    bibleReader.classList.add("hidden");
+    splitter.classList.add("hidden");
+    navigationBar.classList.add("hidden");
+    aiPanel.classList.add("hidden");
+    prayerEditor.classList.remove("hidden");
+    prayerToggleBtn.classList.add("prayer-active");
+    prayerToggleBtn.setAttribute("aria-label", "Exit Prayer Companion");
+    prayerToggleBtn.title = "Exit Prayer Companion";
+    restorePrayerText();
+  } else {
+    bibleReader.classList.remove("hidden");
+    splitter.classList.remove("hidden");
+    navigationBar.classList.remove("hidden");
+    aiPanel.classList.remove("hidden");
+    prayerEditor.classList.add("hidden");
+    prayerToggleBtn.classList.remove("prayer-active");
+    prayerToggleBtn.setAttribute("aria-label", "Prayer Companion");
+    prayerToggleBtn.title = "Prayer Companion";
+  }
+}
+
+function savePrayerText() {
+  const textarea = document.getElementById("prayer-textarea");
+  const text = textarea.value;
+  localStorage.setItem(PRAYER_STORAGE_KEY, text);
+  showPrayerStatus("Saved");
+}
+
+function restorePrayerText() {
+  const textarea = document.getElementById("prayer-textarea");
+  const saved = localStorage.getItem(PRAYER_STORAGE_KEY);
+  if (saved !== null) {
+    textarea.value = saved;
+  }
+  updatePrayerPreview();
+}
+
+function updatePrayerPreview() {
+  const textarea = document.getElementById("prayer-textarea");
+  const preview = document.getElementById("prayer-preview");
+  const text = textarea.value;
+  preview.innerHTML = text ? renderMarkdown(text) : '<p class="selection-hint">Nothing to preview yet.</p>';
+}
+
+function showPrayerStatus(msg) {
+  const status = document.getElementById("prayer-status");
+  status.textContent = msg;
+  status.style.opacity = "1";
+  clearTimeout(status._hideTimeout);
+  status._hideTimeout = setTimeout(() => {
+    status.style.opacity = "0";
+  }, 1500);
+}
+
+async function copyPrayerToClipboard() {
+  const textarea = document.getElementById("prayer-textarea");
+  const text = textarea.value.trim();
+  if (!text) {
+    showPrayerStatus("Nothing to copy");
+    return;
+  }
+  const fullText = text + "\n\n" + PRAYER_SIGNATURE;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(fullText);
+      showPrayerStatus("Copied");
+    } else {
+      throw new Error("No clipboard API");
+    }
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = fullText;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand("copy");
+      showPrayerStatus("Copied");
+    } catch (e) {
+      showPrayerStatus("Copy failed");
+    } finally {
+      document.body.removeChild(ta);
+    }
+  }
+}
+
+let isEnhancingPrayer = false;
+
+async function enhancePrayerWithAI() {
+  if (isEnhancingPrayer) return;
+  const textarea = document.getElementById("prayer-textarea");
+  const text = textarea.value.trim();
+  if (!text) {
+    showPrayerStatus("Nothing to enhance");
+    return;
+  }
+  const provider = getActiveProvider();
+  if (!provider) {
+    showPrayerStatus("No AI provider configured");
+    return;
+  }
+
+  const styleSelect = document.getElementById("prayer-style-select");
+  const style = styleSelect?.value || DEFAULT_PRAYER_STYLE;
+  const styleLabel = styleSelect?.options[styleSelect.selectedIndex]?.text || style;
+
+  const noteField = document.getElementById("prayer-confidentiality-note");
+  let userPrompt = PRAYER_ENHANCE_PROMPTS[style] || PRAYER_ENHANCE_PROMPTS[DEFAULT_PRAYER_STYLE];
+  if (noteField && noteField.value.trim()) {
+    userPrompt += `\n\nConfidentiality note to include: "${noteField.value.trim()}"`;
+  }
+  userPrompt += `\n\nHere is the prayer request to enhance:\n"${text}"`;
+
+  textarea.dataset.originalText = textarea.value;
+  isEnhancingPrayer = true;
+  showPrayerStatus(`Enhancing with ${styleLabel}...`);
+
+  const requestBody = {
+    model: provider.model,
+    messages: [
+      { role: "system", content: PRAYER_SYSTEM_PROMPT },
+      { role: "user", content: userPrompt }
+    ],
+    max_tokens: 2048,
+    temperature: 0.3
+  };
+
+  try {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    if (provider.apiKey) {
+      headers["Authorization"] = `Bearer ${provider.apiKey}`;
+    }
+
+    const response = await fetch(provider.endpoint, {
+      method: "POST",
+      headers: { ...headers, "Accept": "text/event-stream" },
+      body: JSON.stringify({ ...requestBody, stream: true })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let errMsg = `API returned ${response.status}`;
+
+      if (response.status === 401) {
+        errMsg += " - Authentication failed. Check your API key.";
+      } else if (response.status === 403) {
+        errMsg += " - Forbidden. Check API access permissions.";
+      } else if (response.status === 429) {
+        errMsg += " - Rate limited. Try again later.";
+      } else if (response.status === 503) {
+        errMsg += " - Service overloaded. Try again later.";
+      } else if (response.status === 0 || errText.includes("Failed to fetch")) {
+        errMsg = "Network error. If your API endpoint is local, you may need a CORS proxy.";
+      } else {
+        errMsg += `: ${errText.substring(0, 200)}`;
+      }
+
+      showPrayerStatus(errMsg);
+      return;
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    const isStream = contentType.includes("text/event-stream") || contentType.includes("text/plain");
+
+    if (isStream && response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      let buffer = "";
+
+      showPrayerStatus("Streaming...");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trimStart();
+          if (trimmed.startsWith("data: ")) {
+            const data = trimmed.slice(6);
+            if (data === "[DONE]") break;
+
+            try {
+              const json = JSON.parse(data);
+              const delta = json.choices?.[0]?.delta?.content;
+              if (delta) {
+                fullText += delta;
+                textarea.value = fullText;
+                updatePrayerPreview();
+              }
+            } catch {
+              // Skip unparseable chunks
+            }
+          }
+        }
+      }
+
+      if (!fullText) {
+        showPrayerStatus("Received empty response from API.");
+      } else {
+        updateUndoButton();
+        showPrayerStatus("Enhanced");
+      }
+    } else {
+      const json = await response.json();
+      const content = json.choices?.[0]?.message?.content || "";
+      if (content) {
+        textarea.value = content;
+        updatePrayerPreview();
+        updateUndoButton();
+        showPrayerStatus("Enhanced");
+      } else {
+        showPrayerStatus("Received empty response from API.");
+      }
+    }
+
+  } catch (err) {
+    const msg = err.message || "Unknown error";
+    let displayMsg = `Enhancement failed: ${msg}`;
+
+    if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+      displayMsg = "Network error. This is likely a CORS restriction. Try running through a local proxy.";
+    }
+
+    showPrayerStatus(displayMsg);
+  } finally {
+    isEnhancingPrayer = false;
+  }
+}
+
+function undoPrayerEnhancement() {
+  const textarea = document.getElementById("prayer-textarea");
+  const original = textarea.dataset.originalText;
+  const undoBtn = document.getElementById("undo-prayer-btn");
+  if (original === undefined) {
+    showPrayerStatus("Nothing to undo");
+    return;
+  }
+  textarea.value = original;
+  delete textarea.dataset.originalText;
+  updatePrayerPreview();
+  updateUndoButton();
+  showPrayerStatus("Reverted to original");
+}
+
+function updateUndoButton() {
+  const textarea = document.getElementById("prayer-textarea");
+  const undoBtn = document.getElementById("undo-prayer-btn");
+  if (!undoBtn) return;
+  undoBtn.disabled = textarea.dataset.originalText === undefined;
+}
+
+function initPrayerEnhancementUI() {
+  const styleSelect = document.getElementById("prayer-style-select");
+  if (!styleSelect) return;
+
+  const saved = localStorage.getItem(PRAYER_STYLE_STORAGE_KEY);
+  if (saved && PRAYER_ENHANCE_PROMPTS[saved]) {
+    styleSelect.value = saved;
+  }
+
+  styleSelect.addEventListener("change", () => {
+    localStorage.setItem(PRAYER_STYLE_STORAGE_KEY, styleSelect.value);
+  });
+
+  const undoBtn = document.getElementById("undo-prayer-btn");
+  if (undoBtn) undoBtn.addEventListener("click", undoPrayerEnhancement);
+}
+
+function initPrayerMode() {
+  const prayerToggleBtn = document.getElementById("prayer-toggle-btn");
+  const prayerTextarea = document.getElementById("prayer-textarea");
+  const prayerCopyBtn = document.getElementById("prayer-copy-btn");
+  const prayerSaveBtn = document.getElementById("prayer-save-btn");
+  const enhanceBtn = document.getElementById("enhance-prayer-btn");
+
+  prayerToggleBtn.addEventListener("click", togglePrayerMode);
+  prayerCopyBtn.addEventListener("click", copyPrayerToClipboard);
+  prayerSaveBtn.addEventListener("click", savePrayerText);
+  if (enhanceBtn) enhanceBtn.addEventListener("click", enhancePrayerWithAI);
+
+  let saveTimeout = null;
+  prayerTextarea.addEventListener("input", () => {
+    updatePrayerPreview();
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+      if (!isEnhancingPrayer) savePrayerText();
+    }, 800);
+  });
+
+  const saved = localStorage.getItem(PRAYER_STORAGE_KEY);
+  if (saved) {
+    prayerTextarea.value = saved;
+  }
+
+  initPrayerSplitter();
+}
+
+function initPrayerSplitter() {
+  const splitter = document.getElementById("prayer-splitter");
+  const container = document.getElementById("prayer-split-container");
+  const textarea = document.getElementById("prayer-textarea");
+  if (!splitter || !container || !textarea) return;
+
+  const savedSplit = localStorage.getItem("bibleCompanion_prayer_splitter");
+  if (savedSplit) {
+    const pct = clamp(parseFloat(savedSplit), 20, 80);
+    textarea.style.flex = `0 0 ${pct}%`;
+  }
+
+  let isDragging = false;
+
+  splitter.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    e.preventDefault();
+    document.body.style.userSelect = "none";
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    const rect = container.getBoundingClientRect();
+    const offset = e.clientX - rect.left;
+    const pct = (offset / rect.width) * 100;
+    const clamped = clamp(pct, 20, 80);
+    textarea.style.flex = `0 0 ${clamped}%`;
+    localStorage.setItem("bibleCompanion_prayer_splitter", String(clamped));
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    document.body.style.userSelect = "";
+  });
 }
 
 bootstrap();

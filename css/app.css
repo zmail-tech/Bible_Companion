@@ -1472,6 +1472,391 @@ header#app-header {
 
 /* --- Responsive --- */
 
+/* --- Prayer Companion Mode --- */
+
+.hidden {
+  display: none !important;
+}
+
+.prayer-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  background: var(--parchment);
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.prayer-status {
+  font-size: 0.7rem;
+  color: var(--success);
+  font-family: "Times New Roman", Times, Georgia, serif;
+  font-style: italic;
+  transition: opacity 0.3s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.prayer-toggle-btn.prayer-active {
+  background: var(--gold-light);
+  color: var(--navy);
+}
+
+.prayer-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 200px;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bible-bg);
+}
+
+.prayer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  background: var(--parchment);
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.prayer-toolbar-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: "Times New Roman", Times, Georgia, serif;
+}
+
+.prayer-style-select {
+  background: var(--bible-bg);
+  border-top: 2px solid var(--bevel-dark);
+  border-left: 2px solid var(--bevel-dark);
+  border-bottom: 2px solid var(--bevel-light);
+  border-right: 2px solid var(--bevel-light);
+  color: var(--text-primary);
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  cursor: pointer;
+  min-width: 80px;
+}
+
+.prayer-style-select:focus {
+  outline: 1px dotted var(--burgundy);
+}
+
+.enhance-btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  flex-shrink: 0;
+}
+
+.prayer-confidentiality-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 1rem;
+  background: var(--parchment);
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.prayer-confidentiality-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: "Times New Roman", Times, Georgia, serif;
+  flex-shrink: 0;
+}
+
+.prayer-confidentiality-optional {
+  font-style: italic;
+  font-weight: 400;
+}
+
+.prayer-confidentiality-input {
+  flex: 1;
+  background: var(--bible-bg);
+  border-top: 2px solid var(--bevel-dark);
+  border-left: 2px solid var(--bevel-dark);
+  border-bottom: 2px solid var(--bevel-light);
+  border-right: 2px solid var(--bevel-light);
+  color: var(--text-primary);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+}
+
+.prayer-confidentiality-input:focus {
+  outline: 1px dotted var(--burgundy);
+}
+
+.numbered-list {
+  margin: 0.5rem 0 0.75rem 1.5rem;
+  padding: 0;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  color: var(--text-primary);
+}
+
+.prayer-preview ol.numbered-list {
+  margin: 0.4rem 0 0.5rem 1.5rem;
+}
+
+.prayer-textarea {
+  flex: 1;
+  min-height: 120px;
+  padding: 1rem;
+  font-size: 1rem;
+  font-family: "Courier New", Courier, monospace;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  background: var(--bible-bg);
+  color: var(--text-primary);
+  border: none;
+  outline: none;
+  resize: none;
+}
+
+.prayer-textarea:focus {
+  outline: 1px dotted var(--burgundy);
+}
+
+.prayer-split-container {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.prayer-splitter {
+  width: 8px;
+  cursor: col-resize;
+  flex-shrink: 0;
+  background: var(--parchment-dark);
+  border-left: 2px solid var(--bevel-light);
+  border-right: 2px solid var(--bevel-dark);
+  position: relative;
+  transition: background 0.1s ease;
+}
+
+.prayer-splitter:hover {
+  background: var(--gold-light);
+}
+
+.prayer-splitter:active {
+  background: var(--gold);
+  width: 10px;
+}
+
+.prayer-splitter::after {
+  content: "\2261";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.prayer-preview-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 2px solid var(--gold);
+  background: var(--ai-bg);
+}
+
+.prayer-preview-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gold);
+  padding: 0.4rem 1rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  background: var(--parchment);
+  margin: 0;
+}
+
+.prayer-preview {
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  font-family: "Times New Roman", Times, Georgia, serif;
+}
+
+.prayer-preview h1,
+.prayer-preview h2,
+.prayer-preview h3 {
+  margin-top: 0.75rem;
+  margin-bottom: 0.4rem;
+  color: var(--burgundy);
+  font-family: "Times New Roman", Times, Georgia, serif;
+}
+
+.prayer-preview h1 { font-size: 1.15rem; }
+.prayer-preview h2 { font-size: 1.05rem; }
+.prayer-preview h3 { font-size: 0.95rem; }
+
+.prayer-preview p { margin-bottom: 0.5rem; }
+
+.prayer-preview strong { color: var(--navy); }
+
+.prayer-preview em { color: var(--burgundy); }
+
+.prayer-preview ul,
+.prayer-preview ol {
+  margin: 0.4rem 0 0.5rem 1.5rem;
+}
+
+.prayer-preview code {
+  background: var(--body-bg);
+  padding: 0.15em 0.3em;
+  font-size: 0.85em;
+  font-family: "Courier New", Courier, monospace;
+  border: 1px solid var(--border-light);
+}
+
+.prayer-preview pre {
+  background: var(--body-bg);
+  padding: 0.6rem;
+  overflow-x: auto;
+  margin: 0.4rem 0;
+  border-top: 2px solid var(--bevel-dark);
+  border-left: 2px solid var(--bevel-dark);
+  border-bottom: 2px solid var(--bevel-light);
+  border-right: 2px solid var(--bevel-light);
+}
+
+.prayer-preview pre code {
+  background: none;
+  padding: 0;
+  border: none;
+}
+
+.prayer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background: var(--parchment);
+  border-top: 2px solid var(--gold);
+  flex-shrink: 0;
+}
+
+.prayer-signature {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--text-muted);
+  font-family: "Times New Roman", Times, Georgia, serif;
+}
+
+/* --- Modern Theme Prayer Overrides --- */
+
+[data-theme="modern"] .prayer-toolbar {
+  border-bottom: 1px solid var(--border-dark);
+}
+
+[data-theme="modern"] .prayer-toolbar-hint {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+[data-theme="modern"] .prayer-textarea {
+  font-family: "Courier New", Courier, monospace;
+}
+
+[data-theme="modern"] .prayer-preview-title {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+[data-theme="modern"] .prayer-preview,
+[data-theme="modern"] .prayer-preview h1,
+[data-theme="modern"] .prayer-preview h2,
+[data-theme="modern"] .prayer-preview h3,
+[data-theme="modern"] .prayer-preview p,
+[data-theme="modern"] .prayer-preview ul,
+[data-theme="modern"] .prayer-preview ol,
+[data-theme="modern"] .prayer-preview li {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+[data-theme="modern"] .prayer-preview pre {
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+[data-theme="modern"] .prayer-preview code {
+  border: 1px solid var(--border-dark);
+  border-radius: 4px;
+}
+
+[data-theme="modern"] .prayer-footer {
+  border-top: 1px solid var(--gold);
+}
+
+[data-theme="modern"] .prayer-signature {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+[data-theme="modern"] .prayer-status {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+[data-theme="modern"] .prayer-split-container {
+  background: var(--bible-bg);
+}
+
+[data-theme="modern"] .prayer-splitter {
+  background: var(--border-light);
+  border-left: none;
+  border-right: none;
+}
+
+[data-theme="modern"] .prayer-preview-container {
+  border-top: 1px solid var(--gold);
+}
+
+[data-theme="modern"] .prayer-style-select {
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+[data-theme="modern"] .enhance-btn {
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+[data-theme="modern"] .enhance-btn:active {
+  border: 1px solid var(--border-dark);
+}
+
+[data-theme="modern"] .prayer-confidentiality-row {
+  border-bottom: 1px solid var(--border-dark);
+}
+
+[data-theme="modern"] .prayer-confidentiality-input {
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+[data-theme="modern"] .prayer-confidentiality-input:focus {
+  outline: 2px solid var(--burgundy);
+}
+
+[data-theme="modern"] .prayer-style-select:focus {
+  outline: 2px solid var(--burgundy);
+}
+
+[data-theme="modern"] .prayer-toolbar-hint,
+[data-theme="modern"] .prayer-confidentiality-label {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* --- Responsive --- */
+
 @media (max-width: 768px) {
   #split-container {
     flex-direction: column;
@@ -1538,6 +1923,52 @@ header#app-header {
 
   .provider-status {
     max-width: 160px;
+  }
+
+  .prayer-split-container {
+    flex-direction: column;
+  }
+
+  .prayer-splitter {
+    display: none;
+  }
+
+  .prayer-textarea {
+    flex: 1;
+    min-height: 150px;
+  }
+
+  .prayer-preview-container {
+    flex: 1;
+    min-height: 100px;
+    border-left: none;
+    border-top: 2px solid var(--gold);
+  }
+
+  .prayer-toolbar-hint {
+    font-size: 0.65rem;
+  }
+
+  .prayer-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .prayer-style-select {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.3rem;
+  }
+
+  .enhance-btn {
+    font-size: 0.7rem;
+  }
+
+  .prayer-confidentiality-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .prayer-confidentiality-input {
+    width: 100%;
   }
 }
 
