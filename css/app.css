@@ -848,6 +848,18 @@ header#app-header {
   border: none;
 }
 
+#ai-response hr.markdown-hr {
+  border: none;
+  border-top: 1px solid var(--border-light);
+  margin: 1rem 0;
+}
+
+.prayer-preview hr.markdown-hr {
+  border: none;
+  border-top: 1px solid var(--border-light);
+  margin: 0.75rem 0;
+}
+
 /* --- Buttons --- */
 
 .icon-btn {
@@ -1433,6 +1445,14 @@ header#app-header {
   border-radius: 4px;
 }
 
+[data-theme="modern"] #ai-response hr.markdown-hr {
+  border-top-color: var(--border-dark);
+}
+
+[data-theme="modern"] .prayer-preview hr.markdown-hr {
+  border-top-color: var(--border-dark);
+}
+
 [data-theme="modern"] .status-message {
   border: 1px solid var(--border-light);
   border-radius: 6px;
@@ -1516,6 +1536,7 @@ header#app-header {
 .prayer-toolbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
   padding: 0.4rem 1rem;
   background: var(--parchment);
@@ -1529,67 +1550,10 @@ header#app-header {
   font-family: "Times New Roman", Times, Georgia, serif;
 }
 
-.prayer-style-select {
-  background: var(--bible-bg);
-  border-top: 2px solid var(--bevel-dark);
-  border-left: 2px solid var(--bevel-dark);
-  border-bottom: 2px solid var(--bevel-light);
-  border-right: 2px solid var(--bevel-light);
-  color: var(--text-primary);
-  padding: 0.2rem 0.4rem;
-  font-size: 0.75rem;
-  font-family: "Times New Roman", Times, Georgia, serif;
-  cursor: pointer;
-  min-width: 80px;
-}
-
-.prayer-style-select:focus {
-  outline: 1px dotted var(--burgundy);
-}
-
 .enhance-btn {
   font-size: 0.75rem;
   padding: 0.25rem 0.6rem;
   flex-shrink: 0;
-}
-
-.prayer-confidentiality-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 1rem;
-  background: var(--parchment);
-  border-bottom: 1px solid var(--border-light);
-  flex-shrink: 0;
-}
-
-.prayer-confidentiality-label {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  font-family: "Times New Roman", Times, Georgia, serif;
-  flex-shrink: 0;
-}
-
-.prayer-confidentiality-optional {
-  font-style: italic;
-  font-weight: 400;
-}
-
-.prayer-confidentiality-input {
-  flex: 1;
-  background: var(--bible-bg);
-  border-top: 2px solid var(--bevel-dark);
-  border-left: 2px solid var(--bevel-dark);
-  border-bottom: 2px solid var(--bevel-light);
-  border-right: 2px solid var(--bevel-light);
-  color: var(--text-primary);
-  padding: 0.25rem 0.5rem;
-  font-size: 0.8rem;
-  font-family: "Times New Roman", Times, Georgia, serif;
-}
-
-.prayer-confidentiality-input:focus {
-  outline: 1px dotted var(--burgundy);
 }
 
 .numbered-list {
@@ -1819,11 +1783,6 @@ header#app-header {
   border-top: 1px solid var(--gold);
 }
 
-[data-theme="modern"] .prayer-style-select {
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-}
-
 [data-theme="modern"] .enhance-btn {
   border: 1px solid var(--border-light);
   border-radius: 6px;
@@ -1833,25 +1792,7 @@ header#app-header {
   border: 1px solid var(--border-dark);
 }
 
-[data-theme="modern"] .prayer-confidentiality-row {
-  border-bottom: 1px solid var(--border-dark);
-}
-
-[data-theme="modern"] .prayer-confidentiality-input {
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-}
-
-[data-theme="modern"] .prayer-confidentiality-input:focus {
-  outline: 2px solid var(--burgundy);
-}
-
-[data-theme="modern"] .prayer-style-select:focus {
-  outline: 2px solid var(--burgundy);
-}
-
-[data-theme="modern"] .prayer-toolbar-hint,
-[data-theme="modern"] .prayer-confidentiality-label {
+[data-theme="modern"] .prayer-toolbar-hint {
   font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -1953,24 +1894,11 @@ header#app-header {
     flex-wrap: wrap;
   }
 
-  .prayer-style-select {
-    font-size: 0.7rem;
-    padding: 0.15rem 0.3rem;
-  }
-
-  .enhance-btn {
+   .enhance-btn {
     font-size: 0.7rem;
   }
 
-  .prayer-confidentiality-row {
-    flex-direction: column;
-    align-items: flex-start;
   }
-
-  .prayer-confidentiality-input {
-    width: 100%;
-  }
-}
 
 @media (max-width: 480px) {
   .provider-status {

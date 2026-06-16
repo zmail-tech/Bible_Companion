@@ -13,7 +13,8 @@ const DEFAULT_SETTINGS = {
       model: "gpt-4o"
     }
   ],
-  activeProviderId: "default"
+  activeProviderId: "default",
+  prayerSignature: "\u2014 Bible Companion"
 };
 
 let settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
@@ -29,7 +30,8 @@ function migrateOldSettings(oldSettings) {
       apiKey: oldSettings.apiKey || "",
       model: oldSettings.model || "gpt-4o"
     }],
-    activeProviderId: "default"
+    activeProviderId: "default",
+    prayerSignature: oldSettings.prayerSignature || "\u2014 Bible Companion"
   };
 }
 
@@ -59,6 +61,15 @@ export function getProviderById(id) {
   return settings.providers.find(p => p.id === id) || null;
 }
 
+export function getPrayerSignature() {
+  return settings.prayerSignature || "\u2014 Bible Companion";
+}
+
+export function setPrayerSignature(val) {
+  settings.prayerSignature = val ?? "\u2014 Bible Companion";
+  saveSettingsLocally();
+}
+
 export function setApiKey(key) {
   const provider = getActiveProvider();
   if (provider) provider.apiKey = key;
@@ -80,6 +91,9 @@ export function loadSettingsLocally() {
       console.log("[settings] loadSettingsLocally: parsed =", parsed);
       if (!isNewFormat(parsed)) {
         return migrateOldSettings(parsed);
+      }
+      if (parsed.prayerSignature === undefined || parsed.prayerSignature === null) {
+        parsed.prayerSignature = DEFAULT_SETTINGS.prayerSignature;
       }
       return parsed;
     }
@@ -276,6 +290,7 @@ function initSettingsModal() {
   const overlay = modal.querySelector(".modal-overlay");
   const form = document.getElementById("settings-form");
   const resetBtn = document.getElementById("reset-settings");
+  const prayerSignatureInput = document.getElementById("prayer-signature-input");
 
   const providerSelect = document.getElementById("provider-select");
   const providerNameInput = document.getElementById("provider-name");
@@ -338,6 +353,7 @@ function initSettingsModal() {
     statusEl.textContent = "";
     const savedTheme = localStorage.getItem("bibleCompanion_theme") || "light";
     themeSelect.value = savedTheme;
+    prayerSignatureInput.value = getPrayerSignature();
     updateDeleteButtonState();
     modal.classList.add("active");
     providerSelect.focus();
@@ -481,6 +497,9 @@ function initSettingsModal() {
     const active = getActiveProvider();
     populateFormFromProvider(active);
     updateDeleteButtonState();
+    if (prayerSignatureInput) {
+      prayerSignatureInput.value = getPrayerSignature();
+    }
     setStatus("Settings reset to defaults.", "success");
   });
 
@@ -520,6 +539,11 @@ function initSettingsModal() {
       setStatus("Settings saved, but connection test could not reach the endpoint. Check the URL and API key.", "warning");
     }
     if (window.updateProviderStatus) window.updateProviderStatus();
+    if (prayerSignatureInput) {
+      const newSig = prayerSignatureInput.value.trim();
+      setPrayerSignature(newSig);
+      if (window.updatePrayerSignatureDisplay) window.updatePrayerSignatureDisplay();
+    }
   });
 }
 

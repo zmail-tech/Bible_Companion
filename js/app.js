@@ -20,7 +20,7 @@ Your purpose is to provide commentary on Bible passages.
 - **Accuracy:** Ensure responses are unbiased, positive, and accurate.`;
 
 import { loadBibleData, isLoaded, getBooks, getOldTestament, getNewTestament, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference, goNextChapter, goPrevChapter } from "./bible.js";
-import { loadSettingsLocally, getActiveProvider } from "./settings.js";
+import { loadSettingsLocally, getActiveProvider, getPrayerSignature } from "./settings.js";
 
 const INTENT_PROMPTS = {
   commentary: "Provide a detailed theological commentary on the selected passage. Use Southern Baptist theological perspectives and explain the text clearly.",
@@ -34,18 +34,21 @@ const INTENT_PROMPTS = {
 
 const DEFAULT_INTENT = "commentary";
 const PRAYER_STORAGE_KEY = "bibleCompanion_prayerCompanion";
-const PRAYER_SIGNATURE = "— Bible Companion";
-const PRAYER_STYLE_STORAGE_KEY = "bibleCompanion_prayerStyle";
+const PRAYER_SYSTEM_PROMPT = `You are a careful prayer-note writer. Output only the formatted prayer request list. Never output introductory text, explanations, or a preamble.
 
-const PRAYER_SYSTEM_PROMPT = `You are a careful prayer editor. Your only job is to lightly edit the user's prayer request for clarity, grammar, spelling, punctuation, and sentence structure. You are NOT a content generator. Do not add facts, assumptions, new prayer targets, theological commentary, or explanations. Preserve the original meaning, names, details, and tone. Return only the refined prayer request text, with no surrounding commentary or meta-text.`;
-
-const PRAYER_ENHANCE_PROMPTS = {
-  concise: "Condense the prayer request into a brief, clear summary suitable for quick sharing. Keep it to a few sentences while preserving all names and key details. Use only hyphen bullets if listing multiple items.",
-  narrative: "Rewrite the prayer request as a flowing, contextual narrative that provides helpful background and setting. Keep all names and details intact. Do not invent new information or prayer targets.",
-  intercessory: "Restructure the prayer request into 3 distinct prayer points. Each point should have a clear focus area. Use only hyphen bullets to list the points. Keep all original names and details intact."
-};
-
-const DEFAULT_PRAYER_STYLE = "concise";
+RULES:
+- Preserve names, relationships, medical details, timelines, and prayer focuses exactly as provided.
+- Do NOT invent facts, diagnoses, outcomes, dates, names, or prayer requests.
+- Use Markdown formatting.
+- Use ## for major people, couples, families, or groups.
+- Use ### for nested people or subgroups.
+- Separate major sections with * * * on its own line.
+- Use bullet points (-) for all details and prayer requests.
+- Start prayer requests with "Pray for..." whenever possible.
+- Bold important facts or clarifications when useful.
+- Preserve uncertainty: use phrases like "appears to be", "seems to be", or "is dealing with" rather than definitive medical conclusions.
+- Avoid medical advice or clinical conclusions.
+- If the input contains too little information, end with a short clarifying question.`;
 
 let tabs = [];
 let activeTabId = null;
@@ -326,7 +329,6 @@ async function startApp() {
   }
 
   registerServiceWorker();
-  initPrayerEnhancementUI();
   initPrayerMode();
 }
 
@@ -755,11 +757,24 @@ async function sendToAI() {
       headers["Authorization"] = `Bearer ${provider.apiKey}`;
     }
 
+    const REQUEST_TIMEOUT = 120000; // 120 seconds
+    const STREAM_IDLE_TIMEOUT = 30000; // 30 seconds with no stream data
+    const abortController = new AbortController();
+    let activeAbortReason = "";
+    const timeoutId = setTimeout(() => {
+      activeAbortReason = "Request timed out after 120s";
+      abortController.abort();
+    }, REQUEST_TIMEOUT);
+
+    headers["Cache-Control"] = "no-cache";
+    console.log("[ai] request started", { model: provider.model, promptLength: finalPrompt.length });
+
     const response = await fetch(provider.endpoint, {
       method: "POST",
       headers: { ...headers, "Accept": "text/event-stream" },
-      body: JSON.stringify({ ...requestBody, stream: true })
-    });
+      body: JSON.stringify({ ...requestBody, stream: true }),
+      signal: abortController.signal
+    }).finally(() => clearTimeout(timeoutId));
 
     if (!response.ok) {
       const errText = await response.text();
@@ -798,43 +813,93 @@ async function sendToAI() {
       responseEl.innerHTML = "";
       statusEl.textContent = "Streaming...";
       tab.aiStatus = "Streaming...";
+      console.log("[ai] stream started", { contentType });
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      let streamIdleTimer = null;
+      let streamedChunks = 0;
+      const resetStreamIdleTimer = () => {
+        if (streamIdleTimer) clearTimeout(streamIdleTimer);
+        streamIdleTimer = setTimeout(() => {
+          activeAbortReason = "Stream stalled for 30s";
+          abortController.abort();
+        }, STREAM_IDLE_TIMEOUT);
+      };
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+      resetStreamIdleTimer();
 
-        for (const line of lines) {
-          const trimmed = line.trimStart();
-          if (trimmed.startsWith("data: ")) {
-            const data = trimmed.slice(6);
-            if (data === "[DONE]") break;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-            try {
-              const json = JSON.parse(data);
-              const delta = json.choices?.[0]?.delta?.content;
-              if (delta) {
-                fullText += delta;
-                responseEl.innerHTML = renderMarkdown(fullText);
-                responseEl.scrollTop = responseEl.scrollHeight;
+          clearTimeout(streamIdleTimer);
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trimStart();
+            if (trimmed.startsWith("data: ")) {
+              const data = trimmed.slice(6);
+              if (data === "[DONE]") break;
+
+              try {
+                const json = JSON.parse(data);
+                const delta = json.choices?.[0]?.delta?.content || json.choices?.[0]?.delta?.text || json.choices?.[0]?.text;
+                if (delta) {
+                  streamedChunks += 1;
+                  fullText += delta;
+                  responseEl.innerHTML = renderMarkdown(fullText);
+                  responseEl.scrollTop = responseEl.scrollHeight;
+                  if (streamedChunks % 100 === 0) console.log("[ai] streamed", streamedChunks, "chunks");
+                }
+              } catch {
+                // Skip unparseable chunks
               }
-            } catch {
-              // Skip unparseable chunks
             }
           }
+
+          resetStreamIdleTimer();
         }
+
+        clearTimeout(streamIdleTimer);
+      } catch (streamErr) {
+        if (streamIdleTimer) clearTimeout(streamIdleTimer);
+
+        if (streamErr.name === "AbortError") {
+          if (fullText) {
+            responseEl.innerHTML = renderMarkdown(fullText);
+            tab.aiResponse = responseEl.innerHTML;
+            tab.aiStatus = activeAbortReason === "Stream stalled for 30s"
+              ? "Streaming interrupted: no stream data for 30s. Partial result shown."
+              : "Streaming interrupted: request timed out after 120s. Partial result shown.";
+            statusEl.textContent = tab.aiStatus;
+          } else {
+            responseEl.innerHTML = '<p style="color: var(--error);">' + escapeHtml(activeAbortReason === "Stream stalled for 30s"
+              ? "No response data for 30s. Try again."
+              : "Request timed out after 120s. Try again.") + '</p>';
+            tab.aiResponse = responseEl.innerHTML;
+            tab.aiStatus = "Error";
+            statusEl.textContent = "Error";
+          }
+        } else {
+          throw streamErr;
+        }
+      }
+
+      if (abortController.signal.aborted) {
+        return;
       }
 
       if (!fullText) {
         responseEl.innerHTML = '<p class="selection-hint">Received empty response from API.</p>';
       }
 
-      tab.aiResponse = responseEl.innerHTML;
-      tab.aiStatus = "Response ready";
-      statusEl.textContent = "Response ready";
+      if (fullText) {
+        tab.aiResponse = responseEl.innerHTML;
+        tab.aiStatus = "Response ready";
+        statusEl.textContent = "Response ready";
+      }
     } else {
       const json = await response.json();
       const content = json.choices?.[0]?.message?.content || "";
@@ -852,7 +917,13 @@ async function sendToAI() {
     const msg = err.message || "Unknown error";
     let displayMsg = `Request failed: ${msg}`;
 
-    if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+    if (err.name === "AbortError") {
+      if (activeAbortReason === "Stream stalled for 30s") {
+        displayMsg = "Stream stalled for 30s. Try again.";
+      } else {
+        displayMsg = "Request timed out after 120s. Try again.";
+      }
+    } else if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
       displayMsg = `Network error. This is likely a CORS restriction. Try running through a local proxy, or use an endpoint that allows cross-origin requests.`;
     }
 
@@ -866,6 +937,150 @@ async function sendToAI() {
 }
 
 // --- Markdown Renderer ---
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function renderInlineMarkdown(text) {
+  let out = escapeHtml(text);
+  out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+  out = out.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+  out = out.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  return out;
+}
+
+function isHorizontalRule(line) {
+  const trimmed = line.trim();
+  const collapsed = trimmed.replace(/\s+/g, "");
+  if (collapsed.length < 3) return false;
+  const ch = collapsed[0];
+  if (ch === "-" || ch === "*" || ch === "_") {
+    return [...collapsed].every(c => c === ch);
+  }
+  return false;
+}
+
+function renderMarkdown(text) {
+  if (!text) return "";
+
+  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  let html = "";
+  let i = 0;
+  let inFencedCode = false;
+  let codeLang = "";
+  let codeLines = [];
+  let inUl = false;
+  let inOl = false;
+
+  function closeList() {
+    if (inUl) { html += "</ul>"; inUl = false; }
+    if (inOl) { html += "</ol>"; inOl = false; }
+  }
+
+  function closePara() {
+    if (paraBuf) { html += "<p>" + paraBuf + "</p>"; paraBuf = ""; }
+  }
+
+  let paraBuf = "";
+
+  function emitPara() { closePara(); }
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (inFencedCode) {
+      if (trimmed.startsWith("```")) {
+        codeLines.push("</code></pre>");
+        const all = codeLines.join("");
+        html += all;
+        inFencedCode = false;
+        codeLang = "";
+        codeLines = [];
+        closePara();
+        i++;
+        continue;
+      }
+      codeLines.push(escapeHtml(line) + "\n");
+      i++;
+      continue;
+    }
+
+    if (trimmed.startsWith("```")) {
+      closePara();
+      closeList();
+      inFencedCode = true;
+      codeLang = trimmed.slice(3).trim() || "";
+      codeLines = [`<pre><code class="language-${escapeHtml(codeLang)}">`];
+      i++;
+      continue;
+    }
+
+    if (trimmed === "") {
+      emitPara();
+      closeList();
+      i++;
+      continue;
+    }
+
+    if (isHorizontalRule(line)) {
+      emitPara();
+      closeList();
+      html += "<hr class=\"markdown-hr\">";
+      i++;
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (headingMatch) {
+      emitPara();
+      closeList();
+      const level = headingMatch[1].length;
+      html += `<h${level}>${renderInlineMarkdown(headingMatch[2])}</h${level}>`;
+      i++;
+      continue;
+    }
+
+    const ulMatch = trimmed.match(/^[\-\*\+]\s+(.+)$/);
+    if (ulMatch) {
+      emitPara();
+      if (inOl) { html += "</ol>"; inOl = false; }
+      if (!inUl) { html += "<ul>"; inUl = true; }
+      html += `<li>${renderInlineMarkdown(ulMatch[1])}</li>`;
+      i++;
+      continue;
+    }
+
+    const olMatch = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (olMatch) {
+      emitPara();
+      if (inUl) { html += "</ul>"; inUl = false; }
+      if (!inOl) { html += "<ol>"; inOl = true; }
+      html += `<li>${renderInlineMarkdown(olMatch[1])}</li>`;
+      i++;
+      continue;
+    }
+
+    closeList();
+    if (paraBuf) paraBuf += "<br>";
+    paraBuf += renderInlineMarkdown(trimmed);
+    i++;
+  }
+
+  if (inFencedCode) {
+    codeLines.push("</code></pre>");
+    html += codeLines.join("");
+  }
+
+  emitPara();
+  closeList();
+
+  return sanitizeHtml(html);
+}
 
 function sanitizeHtml(html) {
   const div = document.createElement("div");
@@ -891,47 +1106,6 @@ function sanitizeHtml(html) {
     }
   }
 
-  return div.innerHTML;
-}
-
-function renderMarkdown(text) {
-  if (!text) return "";
-
-  let html = escapeHtml(text);
-
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    return `<pre><code class="language-${lang}">${code.trim()}</code></pre>`;
-  });
-
-  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
-
-  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
-  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
-  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
-
-  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
-
-  html = html.replace(/^\d+\. (.+)$/gm, "<li class=\"numbered\">$1</li>");
-  html = html.replace(/((?:<li class="numbered">.+<\/li>\n?)+)/g, "<ol class=\"numbered-list\">$1</ol>");
-  html = html.replace(/^\- (.+)$/gm, "<li>$1</li>");
-  html = html.replace(/((?:<li>.+<\/li>\n?)+)/g, "<ul>$1</ul>");
-
-  html = html.replace(/\n{2,}/g, "</p><p>");
-  html = html.replace(/\n/g, "<br>");
-
-  if (!html.startsWith("<")) {
-    html = "<p>" + html + "</p>";
-  }
-
-  html = sanitizeHtml(html);
-
-  return html;
-}
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
   return div.innerHTML;
 }
 
@@ -1023,7 +1197,7 @@ async function copyPrayerToClipboard() {
     showPrayerStatus("Nothing to copy");
     return;
   }
-  const fullText = text + "\n\n" + PRAYER_SIGNATURE;
+  const fullText = text + "\n\n" + getPrayerSignature();
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(fullText);
@@ -1066,20 +1240,10 @@ async function enhancePrayerWithAI() {
     return;
   }
 
-  const styleSelect = document.getElementById("prayer-style-select");
-  const style = styleSelect?.value || DEFAULT_PRAYER_STYLE;
-  const styleLabel = styleSelect?.options[styleSelect.selectedIndex]?.text || style;
+  const userPrompt = `Convert the following raw input into a structured Markdown prayer-request list:\n\n"${text}"`;
 
-  const noteField = document.getElementById("prayer-confidentiality-note");
-  let userPrompt = PRAYER_ENHANCE_PROMPTS[style] || PRAYER_ENHANCE_PROMPTS[DEFAULT_PRAYER_STYLE];
-  if (noteField && noteField.value.trim()) {
-    userPrompt += `\n\nConfidentiality note to include: "${noteField.value.trim()}"`;
-  }
-  userPrompt += `\n\nHere is the prayer request to enhance:\n"${text}"`;
-
-  textarea.dataset.originalText = textarea.value;
   isEnhancingPrayer = true;
-  showPrayerStatus(`Enhancing with ${styleLabel}...`);
+  showPrayerStatus("Enhancing with AI...");
 
   const requestBody = {
     model: provider.model,
@@ -1099,11 +1263,24 @@ async function enhancePrayerWithAI() {
       headers["Authorization"] = `Bearer ${provider.apiKey}`;
     }
 
+    const REQUEST_TIMEOUT = 120000; // 120 seconds
+    const STREAM_IDLE_TIMEOUT = 30000; // 30 seconds with no stream data
+    const abortController = new AbortController();
+    let activeAbortReason = "";
+    const timeoutId = setTimeout(() => {
+      activeAbortReason = "Request timed out after 120s";
+      abortController.abort();
+    }, REQUEST_TIMEOUT);
+
+    headers["Cache-Control"] = "no-cache";
+    console.log("[prayer] AI request started", { model: provider.model, textLength: text.length });
+
     const response = await fetch(provider.endpoint, {
       method: "POST",
       headers: { ...headers, "Accept": "text/event-stream" },
-      body: JSON.stringify({ ...requestBody, stream: true })
-    });
+      body: JSON.stringify({ ...requestBody, stream: true }),
+      signal: abortController.signal
+    }).finally(() => clearTimeout(timeoutId));
 
     if (!response.ok) {
       const errText = await response.text();
@@ -1137,40 +1314,87 @@ async function enhancePrayerWithAI() {
       let buffer = "";
 
       showPrayerStatus("Streaming...");
+      console.log("[prayer] AI stream started", { contentType });
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      let streamIdleTimer = null;
+      let streamedChunks = 0;
+      const resetStreamIdleTimer = () => {
+        if (streamIdleTimer) clearTimeout(streamIdleTimer);
+        streamIdleTimer = setTimeout(() => {
+          activeAbortReason = "Stream stalled for 30s";
+          abortController.abort();
+        }, STREAM_IDLE_TIMEOUT);
+      };
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+      resetStreamIdleTimer();
 
-        for (const line of lines) {
-          const trimmed = line.trimStart();
-          if (trimmed.startsWith("data: ")) {
-            const data = trimmed.slice(6);
-            if (data === "[DONE]") break;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-            try {
-              const json = JSON.parse(data);
-              const delta = json.choices?.[0]?.delta?.content;
-              if (delta) {
-                fullText += delta;
-                textarea.value = fullText;
-                updatePrayerPreview();
+          clearTimeout(streamIdleTimer);
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trimStart();
+            if (trimmed.startsWith("data: ")) {
+              const data = trimmed.slice(6);
+              if (data === "[DONE]") break;
+
+              try {
+                const json = JSON.parse(data);
+                const delta = json.choices?.[0]?.delta?.content || json.choices?.[0]?.delta?.text || json.choices?.[0]?.text;
+                if (delta) {
+                  streamedChunks += 1;
+                  fullText += delta;
+                  textarea.value = fullText;
+                  updatePrayerPreview();
+                  if (streamedChunks % 100 === 0) console.log("[prayer] AI streamed", streamedChunks, "chunks");
+                }
+              } catch {
+                // Skip unparseable chunks
               }
-            } catch {
-              // Skip unparseable chunks
             }
           }
+
+          resetStreamIdleTimer();
         }
+
+        clearTimeout(streamIdleTimer);
+      } catch (streamErr) {
+        if (streamIdleTimer) clearTimeout(streamIdleTimer);
+
+        if (streamErr.name === "AbortError") {
+          if (fullText) {
+            textarea.value = fullText;
+            updatePrayerPreview();
+            if (activeAbortReason === "Stream stalled for 30s") {
+              showPrayerStatus("Streaming interrupted: no stream data for 30s. Partial result shown.");
+            } else {
+              showPrayerStatus("Streaming interrupted: request timed out after 120s. Partial result shown.");
+            }
+          } else {
+            if (activeAbortReason === "Stream stalled for 30s") {
+              showPrayerStatus("No response data for 30s. Try again with a shorter input.");
+            } else {
+              showPrayerStatus("Request timed out after 120s. Try again with a shorter input.");
+            }
+          }
+        } else {
+          throw streamErr;
+        }
+      }
+
+      if (abortController.signal.aborted) {
+        return;
       }
 
       if (!fullText) {
         showPrayerStatus("Received empty response from API.");
       } else {
-        updateUndoButton();
         showPrayerStatus("Enhanced");
       }
     } else {
@@ -1179,7 +1403,6 @@ async function enhancePrayerWithAI() {
       if (content) {
         textarea.value = content;
         updatePrayerPreview();
-        updateUndoButton();
         showPrayerStatus("Enhanced");
       } else {
         showPrayerStatus("Received empty response from API.");
@@ -1190,7 +1413,13 @@ async function enhancePrayerWithAI() {
     const msg = err.message || "Unknown error";
     let displayMsg = `Enhancement failed: ${msg}`;
 
-    if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+    if (err.name === "AbortError") {
+      if (activeAbortReason === "Stream stalled for 30s") {
+        displayMsg = "Stream stalled for 30s. Try again with a shorter input.";
+      } else {
+        displayMsg = "Request timed out after 120s. Try again with a shorter input.";
+      }
+    } else if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
       displayMsg = "Network error. This is likely a CORS restriction. Try running through a local proxy.";
     }
 
@@ -1200,44 +1429,8 @@ async function enhancePrayerWithAI() {
   }
 }
 
-function undoPrayerEnhancement() {
-  const textarea = document.getElementById("prayer-textarea");
-  const original = textarea.dataset.originalText;
-  const undoBtn = document.getElementById("undo-prayer-btn");
-  if (original === undefined) {
-    showPrayerStatus("Nothing to undo");
-    return;
-  }
-  textarea.value = original;
-  delete textarea.dataset.originalText;
-  updatePrayerPreview();
-  updateUndoButton();
-  showPrayerStatus("Reverted to original");
-}
 
-function updateUndoButton() {
-  const textarea = document.getElementById("prayer-textarea");
-  const undoBtn = document.getElementById("undo-prayer-btn");
-  if (!undoBtn) return;
-  undoBtn.disabled = textarea.dataset.originalText === undefined;
-}
 
-function initPrayerEnhancementUI() {
-  const styleSelect = document.getElementById("prayer-style-select");
-  if (!styleSelect) return;
-
-  const saved = localStorage.getItem(PRAYER_STYLE_STORAGE_KEY);
-  if (saved && PRAYER_ENHANCE_PROMPTS[saved]) {
-    styleSelect.value = saved;
-  }
-
-  styleSelect.addEventListener("change", () => {
-    localStorage.setItem(PRAYER_STYLE_STORAGE_KEY, styleSelect.value);
-  });
-
-  const undoBtn = document.getElementById("undo-prayer-btn");
-  if (undoBtn) undoBtn.addEventListener("click", undoPrayerEnhancement);
-}
 
 function initPrayerMode() {
   const prayerToggleBtn = document.getElementById("prayer-toggle-btn");
@@ -1265,44 +1458,16 @@ function initPrayerMode() {
     prayerTextarea.value = saved;
   }
 
-  initPrayerSplitter();
+  updatePrayerSignatureDisplay();
+
+initPrayerSplitter();
 }
 
-function initPrayerSplitter() {
-  const splitter = document.getElementById("prayer-splitter");
-  const container = document.getElementById("prayer-split-container");
-  const textarea = document.getElementById("prayer-textarea");
-  if (!splitter || !container || !textarea) return;
-
-  const savedSplit = localStorage.getItem("bibleCompanion_prayer_splitter");
-  if (savedSplit) {
-    const pct = clamp(parseFloat(savedSplit), 20, 80);
-    textarea.style.flex = `0 0 ${pct}%`;
-  }
-
-  let isDragging = false;
-
-  splitter.addEventListener("mousedown", (e) => {
-    isDragging = true;
-    e.preventDefault();
-    document.body.style.userSelect = "none";
-  });
-
-  document.addEventListener("mousemove", (e) => {
-    if (!isDragging) return;
-    const rect = container.getBoundingClientRect();
-    const offset = e.clientX - rect.left;
-    const pct = (offset / rect.width) * 100;
-    const clamped = clamp(pct, 20, 80);
-    textarea.style.flex = `0 0 ${clamped}%`;
-    localStorage.setItem("bibleCompanion_prayer_splitter", String(clamped));
-  });
-
-  document.addEventListener("mouseup", () => {
-    if (!isDragging) return;
-    isDragging = false;
-    document.body.style.userSelect = "";
-  });
+function updatePrayerSignatureDisplay() {
+  const el = document.getElementById("prayer-signature");
+  if (el) el.textContent = getPrayerSignature();
 }
+
+window.updatePrayerSignatureDisplay = updatePrayerSignatureDisplay;
 
 bootstrap();
