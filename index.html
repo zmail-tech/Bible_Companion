@@ -95,11 +95,6 @@
         <section id="prayer-editor" class="prayer-editor hidden">
           <div id="prayer-toolbar">
             <span class="prayer-toolbar-hint">Supported: # headings, **bold**, *italic*, - bullets, `code`, ```code blocks```\</span>
-            <select id="prayer-style-select" class="prayer-style-select">
-              <option value="concise" selected>Concise</option>
-              <option value="narrative">Narrative</option>
-              <option value="intercessory">Intercessory</option>
-            </select>
             <button id="enhance-prayer-btn" class="btn-secondary enhance-btn" title="Enhance with AI">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 3v1m0 16v1m-9-9h1m16 0h1m-2.636-6.364l-.707.707M6.343 17.657l-.707.707M18.364 18.364l-.707-.707M6.343 6.343l-.707-.707"/>
@@ -107,17 +102,6 @@
               </svg>
               Enhance with AI
             </button>
-            <button id="undo-prayer-btn" class="btn-secondary enhance-btn" title="Undo enhancement" disabled>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="1 4 1 10 7 10"></polyline>
-                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-              </svg>
-              Undo
-            </button>
-          </div>
-          <div class="prayer-confidentiality-row">
-            <label for="prayer-confidentiality-note" class="prayer-confidentiality-label">Confidentiality note <span class="prayer-confidentiality-optional">(optional)</span></label>
-            <input type="text" id="prayer-confidentiality-note" class="prayer-confidentiality-input" placeholder="e.g. Keep names general for group sharing">
           </div>
           <div id="prayer-split-container" class="prayer-split-container">
             <textarea id="prayer-textarea" class="prayer-textarea" placeholder="Write your prayer list here..."></textarea>
@@ -171,6 +155,11 @@
             <option value="dark">Dark</option>
             <option value="modern">Modern (Slate)</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label for="prayer-signature-input">Prayer Signature</label>
+          <input type="text" id="prayer-signature-input" placeholder="— Bible Companion">
+          <small class="form-hint">Signature appended when copying prayer text and shown in the footer.</small>
         </div>
         <div class="form-group">
           <label for="provider-select">Provider</label>
