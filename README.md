@@ -1,17 +1,17 @@
 # Bible Companion
 
-A lightweight, installable Bible reader with AI-powered commentary. Built for focused study with a clean, dark-themed web interface. Settings are stored in plain text in localStorage -- suitable for local-only personal use.
+A lightweight, installable Bible reader with AI-powered commentary and a Prayer Companion mode for Markdown prayer lists. Built for focused study with a clean, dark-themed web interface. Settings, API keys, and generated prayer text are stored in plain text in `localStorage` for local-only personal use.
 
-This version has been simplified to run purely client-side. All previous server-side dependencies, SQLite persistence, and authentication layers have been removed, relying solely on local storage.
+This version runs entirely in the browser. Server-side dependencies, SQLite persistence, and authentication layers have been removed, so the app relies on local storage and optional OpenAI-compatible API endpoints for AI features.
 
-## Features
+## Current Status
 
-- **BSB Bible Text** — Full berean Standard Bible with Strong's number annotations
-- **AI Commentary** — Send selected verses to any OpenAI-compatible endpoint for AI-powered analysis
-- **Installable PWA** — Works offline as a progressive web app on desktop and mobile
-- **Plain-Text Settings** — API keys and preferences stored in localStorage
-- **Settings Panel** — Configure API endpoint, key, and model name per your LLM provider
-- **Keyboard Shortcuts** — `Ctrl+Enter` to send selected verses to AI
+- **Stable local app shell** — A client-side progressive web app with offline Bible text available after installation.
+- **BSB Bible Reader** — Full Berean Standard Bible text with Strong's number annotations and chapter navigation.
+- **AI Commentary Panel** — Send selected verse text to any OpenAI-compatible endpoint for commentary.
+- **Prayer Companion** — Create and format Markdown prayer lists, enhance them with AI, copy them, save them locally, and undo AI edits.
+- **Local Settings** — Configure API endpoint, key, model, theme, and prayer signature from the settings panel.
+- **Keyboard Shortcuts** — Use `Ctrl+Enter` to send selected verses to AI.
 
 ## Architecture
 
@@ -22,7 +22,7 @@ Bible_Companion/
 ├── sw.js                   # Service worker for offline caching
 ├── css/app.css             # Dark theme styles
 ├── js/
-│   ├── app.js              # Main app logic and AI panel
+│   ├── app.js              # Main app logic, AI panel, and Prayer Companion mode
 │   ├── bible.js            # Bible navigation and verse loading
 │   └── settings.js         # Settings modal and localStorage persistence
 ├── bibles/                 # Parsed Bible text (BSB)
@@ -37,13 +37,13 @@ Bible_Companion/
 
 ## Storage
 
-Settings (API endpoint, key, and model) are stored in plain JSON format in the browser's localStorage.
+Settings (API endpoint, key, model, theme, and prayer signature) and saved prayer text are stored in the browser's `localStorage`. The Prayer Companion undo state is available during the current editor session.
 
-**Warning:** No server-side encryption or authentication is applied, so plain text API keys are accessible locally. This application must only be used locally.
+**Warning:** No server-side encryption or authentication is applied, so plain text API keys and local prayer text are accessible locally. This application must only be used locally.
 
 ## Requirements
 
-- A modern web browser with localStorage support
+- A modern web browser with `localStorage` support
 - An OpenAI-compatible API endpoint for AI commentary (e.g., OpenAI, LiteLLM, Ollama, any v1/chat/completions-compatible server)
 
 ## Setup
