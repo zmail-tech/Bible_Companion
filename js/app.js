@@ -1286,6 +1286,7 @@ async function enhancePrayerWithAI() {
 
   const userPrompt = `PRAYER INPUT:\n\n${text}\n\nPRAY LIST:`;
 
+  textarea.dataset.originalText = textarea.value;
   isEnhancingPrayer = true;
   showPrayerStatus("Enhancing with AI...");
 
@@ -1480,6 +1481,7 @@ async function enhancePrayerWithAI() {
         if (abortFinalText) {
           textarea.value = abortFinalText;
           updatePrayerPreview();
+          updateUndoButton();
           if (activeAbortReason === "Stream stalled for 30s") {
             showPrayerStatus("Streaming interrupted: no stream data for 30s. Partial result shown.");
           } else {
@@ -1517,6 +1519,7 @@ async function enhancePrayerWithAI() {
         showPrayerStatus("Received empty response from API.");
       }
     } else {
+      updateUndoButton();
       showPrayerStatus("Enhanced");
     }
 
@@ -1543,17 +1546,40 @@ async function enhancePrayerWithAI() {
 
 
 
+function undoPrayerEnhancement() {
+  const textarea = document.getElementById("prayer-textarea");
+  const original = textarea.dataset.originalText;
+  if (original === undefined) {
+    showPrayerStatus("Nothing to undo");
+    return;
+  }
+  textarea.value = original;
+  delete textarea.dataset.originalText;
+  updatePrayerPreview();
+  updateUndoButton();
+  showPrayerStatus("Reverted to original");
+}
+
+function updateUndoButton() {
+  const textarea = document.getElementById("prayer-textarea");
+  const undoBtn = document.getElementById("undo-prayer-btn");
+  if (!undoBtn) return;
+  undoBtn.disabled = textarea.dataset.originalText === undefined;
+}
+
 function initPrayerMode() {
   const prayerToggleBtn = document.getElementById("prayer-toggle-btn");
   const prayerTextarea = document.getElementById("prayer-textarea");
   const prayerCopyBtn = document.getElementById("prayer-copy-btn");
   const prayerSaveBtn = document.getElementById("prayer-save-btn");
   const enhanceBtn = document.getElementById("enhance-prayer-btn");
+  const undoBtn = document.getElementById("undo-prayer-btn");
 
   prayerToggleBtn.addEventListener("click", togglePrayerMode);
   prayerCopyBtn.addEventListener("click", copyPrayerToClipboard);
   prayerSaveBtn.addEventListener("click", savePrayerText);
   if (enhanceBtn) enhanceBtn.addEventListener("click", enhancePrayerWithAI);
+  if (undoBtn) undoBtn.addEventListener("click", undoPrayerEnhancement);
 
   let saveTimeout = null;
   prayerTextarea.addEventListener("input", () => {
