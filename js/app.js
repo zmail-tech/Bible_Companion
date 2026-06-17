@@ -34,21 +34,7 @@ const INTENT_PROMPTS = {
 
 const DEFAULT_INTENT = "commentary";
 const PRAYER_STORAGE_KEY = "bibleCompanion_prayerCompanion";
-const PRAYER_SYSTEM_PROMPT = `You are a careful prayer-note writer. Output only the formatted prayer request list. Never output introductory text, explanations, or a preamble.
-
-RULES:
-- Preserve names, relationships, medical details, timelines, and prayer focuses exactly as provided.
-- Do NOT invent facts, diagnoses, outcomes, dates, names, or prayer requests.
-- Use Markdown formatting.
-- Use ## for major people, couples, families, or groups.
-- Use ### for nested people or subgroups.
-- Separate major sections with * * * on its own line.
-- Use bullet points (-) for all details and prayer requests.
-- Start prayer requests with "Pray for..." whenever possible.
-- Bold important facts or clarifications when useful.
-- Preserve uncertainty: use phrases like "appears to be", "seems to be", or "is dealing with" rather than definitive medical conclusions.
-- Avoid medical advice or clinical conclusions.
-- If the input contains too little information, end with a short clarifying question.`;
+const PRAYER_SYSTEM_PROMPT = `Format the input as a Markdown prayer-request list. Use ## for people/groups, ### for subgroups, * * * between sections, and bullet points starting with "Pray for...". Preserve facts exactly as given — do not invent anything.`;
 
 let tabs = [];
 let activeTabId = null;
@@ -749,6 +735,16 @@ async function sendToAI() {
     temperature: 0.7
   };
 
+  console.log("[ai] AI request body", {
+    provider: provider.name,
+    model: provider.model,
+    messageCount: requestBody.messages.length,
+    systemPromptLength: requestBody.messages[0].content.length,
+    userPromptLength: requestBody.messages[1].content.length,
+    max_tokens: requestBody.max_tokens,
+    stream: requestBody.stream
+  });
+
   try {
     const headers = {
       "Content-Type": "application/json"
@@ -802,89 +798,119 @@ async function sendToAI() {
     }
 
     const contentType = response.headers.get("content-type") || "";
-    const isStream = contentType.includes("text/event-stream") || contentType.includes("text/plain");
+    // llama.cpp uses application/x-ndjson; OpenAI/SSE uses text/event-stream; some servers use text/plain
+    // Since we always request stream:true, treat successful responses with body as streamable
+    const isStreamContentType = contentType.includes("text/event-stream")
+      || contentType.includes("text/plain")
+      || contentType.includes("application/x-ndjson");
+    const isSSE = contentType.includes("text/event-stream");
+    const isNDJSON = contentType.includes("application/x-ndjson");
+    console.log("[ai] response content-type:", contentType, { isSSE, isNDJSON });
 
-    if (isStream && response.body) {
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-      let buffer = "";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = "";
+    let buffer = "";
 
-      responseEl.innerHTML = "";
-      statusEl.textContent = "Streaming...";
-      tab.aiStatus = "Streaming...";
-      console.log("[ai] stream started", { contentType });
+    responseEl.innerHTML = "";
+    statusEl.textContent = "Streaming...";
+    tab.aiStatus = "Streaming...";
+    console.log("[ai] stream started", { contentType });
 
-      let streamIdleTimer = null;
-      let streamedChunks = 0;
-      const resetStreamIdleTimer = () => {
-        if (streamIdleTimer) clearTimeout(streamIdleTimer);
-        streamIdleTimer = setTimeout(() => {
-          activeAbortReason = "Stream stalled for 30s";
-          abortController.abort();
-        }, STREAM_IDLE_TIMEOUT);
-      };
+    let streamIdleTimer = null;
+    let streamedChunks = 0;
+    const resetStreamIdleTimer = () => {
+      if (streamIdleTimer) clearTimeout(streamIdleTimer);
+      streamIdleTimer = setTimeout(() => {
+        activeAbortReason = "Stream stalled for 30s";
+        abortController.abort();
+      }, STREAM_IDLE_TIMEOUT);
+    };
 
-      resetStreamIdleTimer();
+    resetStreamIdleTimer();
 
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          clearTimeout(streamIdleTimer);
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trimStart();
-            if (trimmed.startsWith("data: ")) {
-              const data = trimmed.slice(6);
-              if (data === "[DONE]") break;
-
-              try {
-                const json = JSON.parse(data);
-                const delta = json.choices?.[0]?.delta?.content || json.choices?.[0]?.delta?.text || json.choices?.[0]?.text;
-                if (delta) {
-                  streamedChunks += 1;
-                  fullText += delta;
-                  responseEl.innerHTML = renderMarkdown(fullText);
-                  responseEl.scrollTop = responseEl.scrollHeight;
-                  if (streamedChunks % 100 === 0) console.log("[ai] streamed", streamedChunks, "chunks");
-                }
-              } catch {
-                // Skip unparseable chunks
-              }
-            }
-          }
-
-          resetStreamIdleTimer();
-        }
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
         clearTimeout(streamIdleTimer);
-      } catch (streamErr) {
-        if (streamIdleTimer) clearTimeout(streamIdleTimer);
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
-        if (streamErr.name === "AbortError") {
-          if (fullText) {
-            responseEl.innerHTML = renderMarkdown(fullText);
-            tab.aiResponse = responseEl.innerHTML;
-            tab.aiStatus = activeAbortReason === "Stream stalled for 30s"
-              ? "Streaming interrupted: no stream data for 30s. Partial result shown."
-              : "Streaming interrupted: request timed out after 120s. Partial result shown.";
-            statusEl.textContent = tab.aiStatus;
-          } else {
-            responseEl.innerHTML = '<p style="color: var(--error);">' + escapeHtml(activeAbortReason === "Stream stalled for 30s"
-              ? "No response data for 30s. Try again."
-              : "Request timed out after 120s. Try again.") + '</p>';
-            tab.aiResponse = responseEl.innerHTML;
-            tab.aiStatus = "Error";
-            statusEl.textContent = "Error";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          let dataStr = trimmed;
+          // SSE format: "data: {json}" — strip the "data: " prefix
+          if (trimmed.startsWith("data: ")) {
+            dataStr = trimmed.slice(6);
           }
-        } else {
-          throw streamErr;
+          // SSE completion signal
+          if (dataStr === "[DONE]") break;
+
+          try {
+            const json = JSON.parse(dataStr);
+            // Handle delta-based streaming (OpenAI/standard) and full-content (llama.cpp/stream)
+            const delta =
+              json.choices?.[0]?.delta?.content ||
+              json.choices?.[0]?.delta?.text ||
+              json.choices?.[0]?.text ||
+              json.content ||
+              json.response ||
+              json.message?.content ||
+              "";
+            if (delta) {
+              streamedChunks += 1;
+              fullText += delta;
+              if (streamedChunks % 50 === 0) {
+                responseEl.innerHTML = renderMarkdown(fullText);
+                responseEl.scrollTop = responseEl.scrollHeight;
+              }
+              if (streamedChunks % 100 === 0) console.log("[ai] streamed", streamedChunks, "chunks");
+            }
+            // Skip reasoning_content to avoid leaking thinking data
+            // (it would appear as noise in the visible response)
+          } catch {
+            // Skip unparseable chunks
+          }
         }
+
+        resetStreamIdleTimer();
+      }
+
+      if (fullText) {
+        const cleanText = stripThinkingTags(fullText);
+        responseEl.innerHTML = renderMarkdown(cleanText);
+        responseEl.scrollTop = responseEl.scrollHeight;
+      }
+
+      clearTimeout(streamIdleTimer);
+    } catch (streamErr) {
+      if (streamIdleTimer) clearTimeout(streamIdleTimer);
+
+      if (streamErr.name === "AbortError") {
+        if (fullText) {
+          const cleanText = stripThinkingTags(fullText);
+          responseEl.innerHTML = renderMarkdown(cleanText);
+          tab.aiResponse = responseEl.innerHTML;
+          tab.aiStatus = activeAbortReason === "Stream stalled for 30s"
+            ? "Streaming interrupted: no stream data for 30s. Partial result shown."
+            : "Streaming interrupted: request timed out after 120s. Partial result shown.";
+          statusEl.textContent = tab.aiStatus;
+        } else {
+          responseEl.innerHTML = '<p style="color: var(--error);">' + escapeHtml(activeAbortReason === "Stream stalled for 30s"
+            ? "No response data for 30s. Try again."
+            : "Request timed out after 120s. Try again.") + '</p>';
+          tab.aiResponse = responseEl.innerHTML;
+          tab.aiStatus = "Error";
+          statusEl.textContent = "Error";
+        }
+      } else {
+        throw streamErr;
+      }
       }
 
       if (abortController.signal.aborted) {
@@ -892,6 +918,12 @@ async function sendToAI() {
       }
 
       if (!fullText) {
+        console.warn("[ai] empty response after streaming", {
+          streamedChunks,
+          model: provider.model,
+          endpoint: provider.endpoint,
+          contentType
+        });
         responseEl.innerHTML = '<p class="selection-hint">Received empty response from API.</p>';
       }
 
@@ -900,18 +932,6 @@ async function sendToAI() {
         tab.aiStatus = "Response ready";
         statusEl.textContent = "Response ready";
       }
-    } else {
-      const json = await response.json();
-      const content = json.choices?.[0]?.message?.content || "";
-      if (content) {
-        responseEl.innerHTML = renderMarkdown(content);
-      } else {
-        responseEl.innerHTML = '<p class="selection-hint">Received empty response from API.</p>';
-      }
-      tab.aiResponse = responseEl.innerHTML;
-      tab.aiStatus = "Response ready";
-      statusEl.textContent = "Response ready";
-    }
 
   } catch (err) {
     const msg = err.message || "Unknown error";
@@ -934,6 +954,30 @@ async function sendToAI() {
   } finally {
     isLoading = false;
   }
+}
+
+// --- Thinking/Reasoning Tag Stripper ---
+
+function stripThinkingTags(text) {
+  if (!text) return text;
+  let result = text;
+  // DeepSeek R1 / OpenAI reasoning / various models use these tags
+  result = result
+    .replace(/<think[\s>][\s\S]*?<\/think>/gi, "")
+    .replace(/<thinking[\s>][\s\S]*?<\/thinking>/gi, "")
+    .replace(/<reasoning[\s>][\s\S]*?<\/reasoning>/gi, "")
+    .replace(/<thought[\s>][\s\S]*?<\/thought>/gi, "")
+    .replace(/<antThinking[\s>][\s\S]*?<\/antThinking>/gi, "")
+    .replace(/<thinking_process[\s>][\s\S]*?<\/thinking_process>/gi, "")
+    // Gemma reasoning models wrap thinking in explicit markers
+    .replace(/%%THINKING%%[\s\S]*?%%THINKING%%/gi, "")
+    .replace(/%%THOUGHT%%[\s\S]*?%%THOUGHT%%/gi, "")
+  // Catch any <think...> or <reason...> or <thought...> variant
+    .replace(/<think[-_\w]*[\s>][\s\S]*?<\/think[-_\w]*>/gi, "")
+    .replace(/<reason[-_\w]*[\s>][\s\S]*?<\/reason[-_\w]*>/gi, "")
+    .replace(/<thought[-_\w]*[\s>][\s\S]*?<\/thought[-_\w]*>/gi, "")
+    .trim();
+  return result;
 }
 
 // --- Markdown Renderer ---
@@ -1240,7 +1284,7 @@ async function enhancePrayerWithAI() {
     return;
   }
 
-  const userPrompt = `Convert the following raw input into a structured Markdown prayer-request list:\n\n"${text}"`;
+  const userPrompt = `PRAYER INPUT:\n\n${text}\n\nPRAY LIST:`;
 
   isEnhancingPrayer = true;
   showPrayerStatus("Enhancing with AI...");
@@ -1251,9 +1295,19 @@ async function enhancePrayerWithAI() {
       { role: "system", content: PRAYER_SYSTEM_PROMPT },
       { role: "user", content: userPrompt }
     ],
-    max_tokens: 2048,
+    max_tokens: 12000,
     temperature: 0.3
   };
+
+  console.log("[prayer] AI request body", {
+    provider: provider.name,
+    model: provider.model,
+    messageCount: requestBody.messages.length,
+    systemPromptLength: requestBody.messages[0].content.length,
+    userPromptLength: requestBody.messages[1].content.length,
+    max_tokens: requestBody.max_tokens,
+    stream: requestBody.stream
+  });
 
   try {
     const headers = {
@@ -1305,108 +1359,165 @@ async function enhancePrayerWithAI() {
     }
 
     const contentType = response.headers.get("content-type") || "";
-    const isStream = contentType.includes("text/event-stream") || contentType.includes("text/plain");
+    const isStreamContentType = contentType.includes("text/event-stream")
+      || contentType.includes("text/plain")
+      || contentType.includes("application/x-ndjson");
+    const isSSE = contentType.includes("text/event-stream");
+    const isNDJSON = contentType.includes("application/x-ndjson");
+    console.log("[prayer] response content-type:", contentType, { isSSE, isNDJSON });
 
-    if (isStream && response.body) {
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-      let buffer = "";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = "";
+    let buffer = "";
 
-      showPrayerStatus("Streaming...");
-      console.log("[prayer] AI stream started", { contentType });
+    showPrayerStatus("Streaming...");
+    console.log("[prayer] stream started", { contentType });
 
-      let streamIdleTimer = null;
-      let streamedChunks = 0;
-      const resetStreamIdleTimer = () => {
-        if (streamIdleTimer) clearTimeout(streamIdleTimer);
-        streamIdleTimer = setTimeout(() => {
-          activeAbortReason = "Stream stalled for 30s";
-          abortController.abort();
-        }, STREAM_IDLE_TIMEOUT);
-      };
+    let streamIdleTimer = null;
+    let streamedChunks = 0;
+    const resetStreamIdleTimer = () => {
+      if (streamIdleTimer) clearTimeout(streamIdleTimer);
+      streamIdleTimer = setTimeout(() => {
+        activeAbortReason = "Stream stalled for 30s";
+        abortController.abort();
+      }, STREAM_IDLE_TIMEOUT);
+    };
 
-      resetStreamIdleTimer();
+    resetStreamIdleTimer();
 
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+    let reasoningBuffer = ""; // fallback: accumulate reasoning content if regular content is empty
+    let finalText = ""; // used both inside stream loop and post-stream check
 
-          clearTimeout(streamIdleTimer);
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trimStart();
-            if (trimmed.startsWith("data: ")) {
-              const data = trimmed.slice(6);
-              if (data === "[DONE]") break;
-
-              try {
-                const json = JSON.parse(data);
-                const delta = json.choices?.[0]?.delta?.content || json.choices?.[0]?.delta?.text || json.choices?.[0]?.text;
-                if (delta) {
-                  streamedChunks += 1;
-                  fullText += delta;
-                  textarea.value = fullText;
-                  updatePrayerPreview();
-                  if (streamedChunks % 100 === 0) console.log("[prayer] AI streamed", streamedChunks, "chunks");
-                }
-              } catch {
-                // Skip unparseable chunks
-              }
-            }
-          }
-
-          resetStreamIdleTimer();
-        }
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
         clearTimeout(streamIdleTimer);
-      } catch (streamErr) {
-        if (streamIdleTimer) clearTimeout(streamIdleTimer);
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
-        if (streamErr.name === "AbortError") {
-          if (fullText) {
-            textarea.value = fullText;
-            updatePrayerPreview();
-            if (activeAbortReason === "Stream stalled for 30s") {
-              showPrayerStatus("Streaming interrupted: no stream data for 30s. Partial result shown.");
-            } else {
-              showPrayerStatus("Streaming interrupted: request timed out after 120s. Partial result shown.");
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          let dataStr = trimmed;
+          if (trimmed.startsWith("data: ")) {
+            dataStr = trimmed.slice(6);
+          }
+          if (dataStr === "[DONE]") break;
+
+          try {
+            const json = JSON.parse(dataStr);
+
+            // Collect reasoning_content separately if model uses a reasoning model
+            const reasoningContent =
+              json.choices?.[0]?.delta?.reasoning_content ||
+              json.choices?.[0]?.delta?.reasoning ||
+              json.choices?.[0]?.delta?.reason ||
+              "";
+            if (reasoningContent) {
+              reasoningBuffer += reasoningContent;
             }
+
+            const delta =
+              json.choices?.[0]?.delta?.content ||
+              json.choices?.[0]?.delta?.text ||
+              json.choices?.[0]?.text ||
+              json.content ||
+              json.response ||
+              json.message?.content ||
+              "";
+            if (delta) {
+              streamedChunks += 1;
+              fullText += delta;
+              if (streamedChunks % 50 === 0) {
+                textarea.value = fullText;
+                updatePrayerPreview();
+              }
+              if (streamedChunks % 100 === 0) console.log("[prayer] AI streamed", streamedChunks, "chunks");
+            }
+          } catch {
+            // Skip unparseable chunks
+          }
+        }
+
+        resetStreamIdleTimer();
+      }
+
+      // Strip thinking tags, use reasoning buffer as fallback if content is empty
+      if (fullText) {
+        finalText = stripThinkingTags(fullText);
+      }
+
+      // If regular content is empty but model produced reasoning, try extracting from reasoning
+      if (!finalText && reasoningBuffer) {
+        finalText = stripThinkingTags(reasoningBuffer);
+      }
+
+      if (finalText) {
+        textarea.value = finalText;
+        updatePrayerPreview();
+      } else {
+        console.warn("[prayer] fullText is empty after streaming — model may have output only thinking tokens");
+      }
+
+      clearTimeout(streamIdleTimer);
+    } catch (streamErr) {
+      if (streamIdleTimer) clearTimeout(streamIdleTimer);
+
+      if (streamErr.name === "AbortError") {
+        let abortFinalText = "";
+        if (fullText) {
+          abortFinalText = stripThinkingTags(fullText);
+        }
+        // Fallback to reasoning content if regular content is empty
+        if (!abortFinalText && reasoningBuffer) {
+          abortFinalText = stripThinkingTags(reasoningBuffer);
+        }
+        if (abortFinalText) {
+          textarea.value = abortFinalText;
+          updatePrayerPreview();
+          if (activeAbortReason === "Stream stalled for 30s") {
+            showPrayerStatus("Streaming interrupted: no stream data for 30s. Partial result shown.");
           } else {
-            if (activeAbortReason === "Stream stalled for 30s") {
-              showPrayerStatus("No response data for 30s. Try again with a shorter input.");
-            } else {
-              showPrayerStatus("Request timed out after 120s. Try again with a shorter input.");
-            }
+            showPrayerStatus("Streaming interrupted: request timed out after 120s. Partial result shown.");
           }
         } else {
-          throw streamErr;
+          if (activeAbortReason === "Stream stalled for 30s") {
+            showPrayerStatus("No response data for 30s. Try again with a shorter input.");
+          } else {
+            showPrayerStatus("Request timed out after 120s. Try again with a shorter input.");
+          }
         }
-      }
-
-      if (abortController.signal.aborted) {
-        return;
-      }
-
-      if (!fullText) {
-        showPrayerStatus("Received empty response from API.");
       } else {
-        showPrayerStatus("Enhanced");
+        throw streamErr;
+      }
+    }
+
+    if (abortController.signal.aborted) {
+      return;
+    }
+
+    if (!finalText) {
+      console.warn("[prayer] empty response after streaming", {
+        streamedChunks,
+        fullTextLength: fullText.length,
+        reasoningBufferLength: reasoningBuffer.length,
+        sawReasoningContent,
+        model: provider.model,
+        endpoint: provider.endpoint,
+        contentType
+      });
+      if (sawReasoningContent) {
+        showPrayerStatus("Model output only reasoning/thinking content. Check console for details.");
+      } else {
+        showPrayerStatus("Received empty response from API.");
       }
     } else {
-      const json = await response.json();
-      const content = json.choices?.[0]?.message?.content || "";
-      if (content) {
-        textarea.value = content;
-        updatePrayerPreview();
-        showPrayerStatus("Enhanced");
-      } else {
-        showPrayerStatus("Received empty response from API.");
-      }
+      showPrayerStatus("Enhanced");
     }
 
   } catch (err) {
