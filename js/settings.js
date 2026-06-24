@@ -484,6 +484,11 @@ function initSettingsModal() {
     }
   });
 
+  // When user types in the API key field, mark it as a new key so it's saved on submit
+  apiKeyInput.addEventListener("input", () => {
+    apiKeyInput.dataset.hasKey = "false";
+  });
+
   modal.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeModal();
   });
