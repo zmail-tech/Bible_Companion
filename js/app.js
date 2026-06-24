@@ -1236,22 +1236,37 @@ function showPrayerStatus(msg) {
 
 async function copyPrayerToClipboard() {
   const textarea = document.getElementById("prayer-textarea");
+  const preview = document.getElementById("prayer-preview");
   const text = textarea.value.trim();
   if (!text) {
     showPrayerStatus("Nothing to copy");
     return;
   }
-  const fullText = text + "\n\n" + getPrayerSignature();
+  const signature = getPrayerSignature();
+
+  // Build formatted HTML from the preview + signature
+  const htmlContent = preview.innerHTML + "<p>" + escapeHtml(signature) + "</p>";
+  // Build plain-text fallback: raw markdown + signature
+  const plainText = text + "\n\n" + signature;
+
   try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(fullText);
+    if (navigator.clipboard && navigator.clipboard.write) {
+      // Try writing both HTML and plain text for rich paste support
+      const htmlBlob = new Blob([htmlContent], { type: "text/html" });
+      const textBlob = new Blob([plainText], { type: "text/plain" });
+      const item = new ClipboardItem({
+        "text/html": htmlBlob,
+        "text/plain": textBlob,
+      });
+      await navigator.clipboard.write([item]);
       showPrayerStatus("Copied");
-    } else {
-      throw new Error("No clipboard API");
+      return;
     }
+    throw new Error("No clipboard API");
   } catch {
+    // Fallback: plain text only via hidden textarea
     const ta = document.createElement("textarea");
-    ta.value = fullText;
+    ta.value = plainText;
     ta.style.position = "fixed";
     ta.style.left = "-9999px";
     ta.style.top = "-9999px";
