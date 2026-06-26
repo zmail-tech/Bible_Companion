@@ -9,17 +9,16 @@ const DEFAULT_SETTINGS = {
       id: "default",
       name: "Default Provider",
       endpoint: "https://api.openai.com/v1/chat/completions",
-      apiKey: "",
-      primaryModel: "gpt-4o",
-      supportModel: null
+      apiKey: ""
     }
   ],
   activeProviderId: "default",
-  prayerSignature: "\u2014 Bible Companion"
+  prayerSignature: "\u2014 Bible Companion",
+  commentaryModel: null,
+  prayerModel: null
 };
 
 let settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-let availableModels = [];
 
 function migrateOldSettings(oldSettings) {
   if (!oldSettings || !oldSettings.endpoint) return null;
@@ -47,18 +46,49 @@ function migrateOldSettings(oldSettings) {
   };
 }
 
+function migrateModelsToSettings(data) {
+  if (!data || !Array.isArray(data.providers)) return data;
+  let commentaryModel = null;
+  let prayerModel = null;
+  for (const p of data.providers) {
+    if (p.primaryModel || p.model) {
+      const modelId = p.primaryModel || p.model;
+      commentaryModel = p.id + "::" + modelId;
+    }
+    if (p.supportModel && p.supportModel.model) {
+      const primary = p.primaryModel || p.model;
+      if (p.supportModel.model !== primary) {
+        prayerModel = p.id + "::" + p.supportModel.model;
+      }
+    }
+    delete p.primaryModel;
+    delete p.supportModel;
+    delete p.model;
+  }
+  return {
+    ...data,
+    commentaryModel: commentaryModel || data.commentaryModel || null,
+    prayerModel: prayerModel || data.prayerModel || null
+  };
+}
+
 function isNewFormat(data) {
   return data && Array.isArray(data.providers) && data.providers.length > 0;
+}
+
+function hasNewModelFields(data) {
+  return data && data.commentaryModel !== undefined;
 }
 
 window.loadSettings = function(s) {
   if (s && !isNewFormat(s)) {
     s = migrateOldSettings(s);
   }
+  if (s && isNewFormat(s) && !hasNewModelFields(s)) {
+    s = migrateModelsToSettings(s);
+  }
   settings = s || JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
   window.settings = settings;
-  console.log("[settings] window.loadSettings called with:", s);
-  console.log("[settings] window.loadSettings - storage key:", STORAGE_KEY);
 };
 
 export function getSettings() {
@@ -66,11 +96,7 @@ export function getSettings() {
 }
 
 export function getActiveProvider() {
-  const provider = getProviderById(settings.activeProviderId) || settings.providers[0] || null;
-  if (provider && !provider.primaryModel && provider.model) {
-    provider.primaryModel = provider.model;
-  }
-  return provider;
+  return getProviderById(settings.activeProviderId) || settings.providers[0] || null;
 }
 
 export function getProviderById(id) {
@@ -86,49 +112,68 @@ export function setPrayerSignature(val) {
   saveSettingsLocally();
 }
 
-export function getSupportConfig() {
-  const provider = getActiveProvider();
-  if (!provider) return null;
+export function getCommentaryModel() {
+  if (!settings.commentaryModel) return null;
+  const parts = settings.commentaryModel.split("::");
+  const providerId = parts[0];
+  const modelId = parts.slice(1).join("::");
+  const provider = getProviderById(providerId);
+  return provider ? { providerId, modelId, provider } : null;
+}
 
-  const sm = provider.supportModel;
-  if (!sm) {
-    return {
-      model: provider.primaryModel || provider.model,
-      endpoint: provider.endpoint,
-      apiKey: provider.apiKey,
-      name: provider.name
-    };
+export function getPrayerModel() {
+  if (settings.prayerModel) {
+    const parts = settings.prayerModel.split("::");
+    const providerId = parts[0];
+    const modelId = parts.slice(1).join("::");
+    const provider = getProviderById(providerId);
+    if (provider) return { providerId, modelId, provider };
   }
-
-  return {
-    model: sm.model,
-    endpoint: sm.endpoint || provider.endpoint,
-    apiKey: sm.apiKey !== undefined ? sm.apiKey : provider.apiKey,
-    name: sm.endpoint ? "Separate" : provider.name
-  };
+  return getCommentaryModel();
 }
 
-export function setApiKey(key) {
-  const provider = getActiveProvider();
-  if (provider) provider.apiKey = key;
+export function setCommentaryModel(value) {
+  settings.commentaryModel = value || null;
+  saveSettingsLocally();
 }
 
-export function clearApiKey() {
-  const provider = getActiveProvider();
-  if (provider) provider.apiKey = "";
+export function setPrayerModel(value) {
+  settings.prayerModel = value || null;
+  saveSettingsLocally();
+}
+
+export function buildAggregatedModelList() {
+  const modelsStore = loadCachedModels();
+  const result = [];
+  for (const provider of settings.providers) {
+    const cached = modelsStore && typeof modelsStore === "object"
+      ? modelsStore[provider.endpoint]
+      : null;
+    const models = cached || [];
+    for (const modelId of models) {
+      result.push({
+        providerId: provider.id,
+        providerName: provider.name,
+        modelId,
+        displayName: provider.name + " / " + modelId
+      });
+    }
+  }
+  return result;
 }
 
 export function loadSettingsLocally() {
   try {
-    console.log("[settings] loadSettingsLocally: STORAGE_KEY =", STORAGE_KEY);
-    console.log("[settings] loadSettingsLocally: all localStorage keys:", Object.keys(localStorage));
     const raw = localStorage.getItem(STORAGE_KEY);
-    console.log("[settings] loadSettingsLocally: raw =", raw);
     if (raw) {
       const parsed = JSON.parse(raw);
-      console.log("[settings] loadSettingsLocally: parsed =", parsed);
       if (!isNewFormat(parsed)) {
-        return migrateOldSettings(parsed);
+        const migrated = migrateOldSettings(parsed);
+        if (migrated) return migrateModelsToSettings(migrated);
+        return migrated;
+      }
+      if (!hasNewModelFields(parsed)) {
+        return migrateModelsToSettings(parsed);
       }
       if (parsed.prayerSignature === undefined || parsed.prayerSignature === null) {
         parsed.prayerSignature = DEFAULT_SETTINGS.prayerSignature;
@@ -138,18 +183,13 @@ export function loadSettingsLocally() {
   } catch (e) {
     console.error("[settings] Failed to load settings from localStorage:", e);
   }
-  console.log("[settings] loadSettingsLocally: returning null (no data found)");
   return null;
 }
 
 function saveSettingsLocally() {
   try {
     const toSave = JSON.stringify(settings);
-    console.log("[settings] saveSettingsLocally: saving =", toSave);
     localStorage.setItem(STORAGE_KEY, toSave);
-    // Verify by reading back immediately
-    const verify = localStorage.getItem(STORAGE_KEY);
-    console.log("[settings] saveSettingsLocally: verified =", verify);
   } catch (e) {
     console.error("[settings] Failed to save settings to localStorage:", e);
   }
@@ -190,100 +230,6 @@ async function fetchModels(modelsUrl, apiKey) {
   }
 }
 
-function populateModelSelect(models) {
-  const select = document.getElementById("model-select");
-  select.innerHTML = '<option value="">-- Select a model --</option>';
-  models.forEach(id => {
-    const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = id;
-    select.appendChild(opt);
-  });
-  availableModels = models;
-}
-
-function switchToSelectMode() {
-  document.getElementById("model-select").style.display = "";
-  document.getElementById("model-name").style.display = "none";
-}
-
-function switchToInputMode() {
-  document.getElementById("model-select").style.display = "none";
-  document.getElementById("model-name").style.display = "";
-}
-
-function populateSupportModelSelect(models) {
-  const select = document.getElementById("support-model-select");
-  select.innerHTML = '<option value="">-- Select a model --</option>';
-  models.forEach(id => {
-    const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = id;
-    select.appendChild(opt);
-  });
-}
-
-function switchSupportToSelectMode() {
-  document.getElementById("support-model-select").style.display = "";
-  document.getElementById("support-model-name").style.display = "none";
-}
-
-function switchSupportToInputMode() {
-  document.getElementById("support-model-select").style.display = "none";
-  document.getElementById("support-model-name").style.display = "";
-}
-
-function savePrimaryModelFromUI() {
-  const select = document.getElementById("model-select");
-  const input = document.getElementById("model-name");
-  const provider = getProviderById(document.getElementById("provider-select").value);
-  if (provider) {
-    if (select.style.display !== "none" && select.value) {
-      provider.primaryModel = select.value;
-    } else if (input.style.display !== "none" && input.value.trim()) {
-      provider.primaryModel = input.value.trim();
-    }
-  }
-}
-
-function getPrimaryModelFromUI() {
-  const select = document.getElementById("model-select");
-  const input = document.getElementById("model-name");
-  if (select.style.display !== "none" && select.value) {
-    return select.value;
-  }
-  if (input.style.display !== "none" && input.value.trim()) {
-    return input.value.trim();
-  }
-  return null;
-}
-
-function saveSupportModelFromUI() {
-  const select = document.getElementById("support-model-select");
-  const input = document.getElementById("support-model-name");
-  const provider = getProviderById(document.getElementById("provider-select").value);
-  if (provider) {
-    if (select && select.style.display !== "none" && select.value) {
-      return select.value;
-    } else if (input && input.style.display !== "none" && input.value.trim()) {
-      return input.value.trim();
-    }
-  }
-  return null;
-}
-
-function getSavedPrimaryModel() {
-  const select = document.getElementById("model-select");
-  const input = document.getElementById("model-name");
-  if (select.style.display !== "none" && select.value) {
-    return select.value;
-  }
-  if (input.style.display !== "none" && input.value.trim()) {
-    return input.value.trim();
-  }
-  return null;
-}
-
 function loadCachedModels() {
   try {
     const raw = localStorage.getItem(MODELS_STORAGE_KEY);
@@ -311,27 +257,13 @@ function clearCachedModels() {
   } catch {}
 }
 
-function getCachedModelsForEndpoint(endpoint) {
-  const store = loadCachedModels();
-  if (store && typeof store === "object" && !Array.isArray(store)) {
-    return store[endpoint] || null;
-  }
-  // Legacy single-endpoint cache
-  if (store && store.endpoint === endpoint) {
-    return store.models || null;
-  }
-  return null;
-}
-
 function addProvider(data) {
   const id = data.id || `provider_${Date.now()}`;
   const provider = {
     id,
     name: data.name || "New Provider",
     endpoint: data.endpoint || "",
-    apiKey: data.apiKey || "",
-    primaryModel: data.primaryModel || "gpt-4o",
-    supportModel: null
+    apiKey: data.apiKey || ""
   };
   settings.providers.push(provider);
   settings.activeProviderId = id;
@@ -356,8 +288,6 @@ function updateProvider(id, data) {
   if (!provider) return false;
   if (data.endpoint !== undefined) provider.endpoint = data.endpoint;
   if (data.apiKey !== undefined) provider.apiKey = data.apiKey;
-  if (data.primaryModel !== undefined) provider.primaryModel = data.primaryModel;
-  if (data.supportModel !== undefined) provider.supportModel = data.supportModel;
   if (data.name !== undefined) provider.name = data.name;
   saveSettingsLocally();
   return true;
@@ -370,6 +300,30 @@ function setActiveProvider(id) {
   }
 }
 
+function populateModelDropdowns() {
+  const aggregated = buildAggregatedModelList();
+  const commentarySelect = document.getElementById("commentary-model-select");
+  const prayerSelect = document.getElementById("prayer-model-select");
+
+  commentarySelect.innerHTML = '<option value="">-- Select a model --</option>';
+  for (const m of aggregated) {
+    const opt = document.createElement("option");
+    opt.value = m.providerId + "::" + m.modelId;
+    opt.textContent = m.displayName;
+    commentarySelect.appendChild(opt);
+  }
+  commentarySelect.value = settings.commentaryModel || "";
+
+  prayerSelect.innerHTML = '<option value="">Same as Commentary Model</option>';
+  for (const m of aggregated) {
+    const opt = document.createElement("option");
+    opt.value = m.providerId + "::" + m.modelId;
+    opt.textContent = m.displayName;
+    prayerSelect.appendChild(opt);
+  }
+  prayerSelect.value = settings.prayerModel || "";
+}
+
 function initSettingsModal() {
   const modal = document.getElementById("settings-modal");
   const openBtn = document.getElementById("settings-btn");
@@ -379,44 +333,74 @@ function initSettingsModal() {
   const resetBtn = document.getElementById("reset-settings");
   const prayerSignatureInput = document.getElementById("prayer-signature-input");
 
-  const providerSelect = document.getElementById("provider-select");
   const providerNameInput = document.getElementById("provider-name");
   const endpointInput = document.getElementById("endpoint-url");
   const apiKeyInput = document.getElementById("api-key");
-  const modelInput = document.getElementById("model-name");
-  const modelSelect = document.getElementById("model-select");
   const themeSelect = document.getElementById("theme-select");
   const statusEl = document.getElementById("connection-status");
-  const fetchModelsBtn = document.getElementById("fetch-models-btn");
   const addProviderBtn = document.getElementById("add-provider-btn");
   const deleteProviderBtn = document.getElementById("delete-provider-btn");
-  const supportModelToggle = document.getElementById("support-model-toggle");
-  const supportModelSection = document.getElementById("support-model-section");
-  const supportSameEndpointRadio = document.getElementById("support-same-endpoint-radio");
-  const supportSeparateEndpointRadio = document.getElementById("support-separate-endpoint-radio");
-  const supportEndpointUrl = document.getElementById("support-endpoint-url");
-  const supportApiKeyInput = document.getElementById("support-api-key");
-  const supportModelSelect = document.getElementById("support-model-select");
-  const supportModelName = document.getElementById("support-model-name");
-  const supportFetchModelsBtn = document.getElementById("support-fetch-models-btn");
-  const supportSameHint = document.getElementById("support-same-hint");
+  const providerListEl = document.getElementById("settings-provider-list");
+  const contextNameEl = document.getElementById("settings-context-name");
+  const contextEndpointEl = document.getElementById("settings-context-endpoint");
+  const commentarySelect = document.getElementById("commentary-model-select");
+  const prayerSelect = document.getElementById("prayer-model-select");
+  const refreshAllBtn = document.getElementById("refresh-all-models-btn");
 
-  function populateProviderDropdown() {
-    providerSelect.innerHTML = "";
+  function renderSettingsSidebar() {
+    const navItems = modal.querySelectorAll(".settings-nav-item");
+    navItems.forEach(item => {
+      item.addEventListener("click", () => {
+        switchSettingsPane(item.dataset.settingsPane);
+      });
+    });
+  }
+
+  function switchSettingsPane(paneName) {
+    modal.querySelectorAll(".settings-nav-item").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.settingsPane === paneName);
+    });
+    modal.querySelectorAll(".settings-pane").forEach(pane => {
+      pane.classList.toggle("active", pane.dataset.settingsPane === paneName);
+    });
+    if (paneName === "models") {
+      populateModelDropdowns();
+    }
+  }
+
+  function populateProviderList() {
+    if (!providerListEl) return;
+    providerListEl.innerHTML = "";
     for (const p of settings.providers) {
-      const opt = document.createElement("option");
-      opt.value = p.id;
-      opt.textContent = p.name;
-      if (p.id === settings.activeProviderId) opt.selected = true;
-      providerSelect.appendChild(opt);
+      const card = document.createElement("div");
+      card.className = "settings-provider-card" + (p.id === settings.activeProviderId ? " active" : "");
+      card.textContent = p.name;
+      card.addEventListener("click", () => {
+        setActiveProvider(p.id);
+        populateProviderList();
+        populateProviderForm(p);
+        if (window.updateProviderStatus) window.updateProviderStatus();
+      });
+      providerListEl.appendChild(card);
+    }
+  }
+
+  function updateContextCard(provider) {
+    if (!contextNameEl || !contextEndpointEl) return;
+    if (provider) {
+      contextNameEl.textContent = provider.name;
+      contextEndpointEl.textContent = provider.endpoint;
+    } else {
+      contextNameEl.textContent = "";
+      contextEndpointEl.textContent = "";
     }
   }
 
   function getSelectedProvider() {
-    return getProviderById(providerSelect.value);
+    return getProviderById(settings.activeProviderId);
   }
 
-  function populateFormFromProvider(provider) {
+  function populateProviderForm(provider) {
     if (!provider) return;
     providerNameInput.value = provider.name;
     endpointInput.value = provider.endpoint;
@@ -427,58 +411,7 @@ function initSettingsModal() {
       apiKeyInput.value = "";
       apiKeyInput.dataset.hasKey = "false";
     }
-    const pm = provider.primaryModel || provider.model;
-    const cached = getCachedModelsForEndpoint(provider.endpoint);
-    if (cached && cached.length > 0) {
-      populateModelSelect(cached);
-      modelSelect.value = pm;
-      switchToSelectMode();
-    } else {
-      switchToInputMode();
-      modelInput.value = pm;
-    }
-
-    // Support model
-    if (!supportModelToggle) return;
-    const sm = provider.supportModel;
-    if (sm) {
-      supportModelToggle.checked = true;
-      supportModelSection.style.display = "";
-      supportSameHint.style.display = "none";
-
-      if (sm.endpoint) {
-        supportSeparateEndpointRadio.checked = true;
-        supportEndpointUrl.style.display = "";
-        supportEndpointUrl.value = sm.endpoint || "";
-        if (sm.apiKey) {
-          supportApiKeyInput.value = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
-          supportApiKeyInput.dataset.hasKey = "true";
-        } else {
-          supportApiKeyInput.value = "";
-          supportApiKeyInput.dataset.hasKey = "false";
-        }
-      } else {
-        supportSameEndpointRadio.checked = true;
-        const eg = document.getElementById("support-endpoint-group");
-        const ak = document.getElementById("support-api-key-group");
-        if (eg) eg.style.display = "none";
-        if (ak) ak.style.display = "none";
-      }
-
-      const smCached = getCachedModelsForEndpoint(sm.endpoint || provider.endpoint);
-      if (smCached && smCached.length > 0) {
-        populateSupportModelSelect(smCached);
-        supportModelSelect.value = sm.model;
-        switchSupportToSelectMode();
-      } else {
-        switchSupportToInputMode();
-        supportModelName.value = sm.model;
-      }
-    } else {
-      supportModelToggle.checked = false;
-      supportModelSection.style.display = "none";
-      supportSameHint.style.display = "";
-    }
+    updateContextCard(provider);
   }
 
   function updateDeleteButtonState() {
@@ -486,17 +419,17 @@ function initSettingsModal() {
   }
 
   function openModal() {
-    populateProviderDropdown();
     const active = getActiveProvider();
-    populateFormFromProvider(active);
+    populateProviderList();
+    populateProviderForm(active);
     statusEl.className = "status-message";
     statusEl.textContent = "";
     const savedTheme = localStorage.getItem("bibleCompanion_theme") || "light";
     themeSelect.value = savedTheme;
     prayerSignatureInput.value = getPrayerSignature();
     updateDeleteButtonState();
+    switchSettingsPane("general");
     modal.classList.add("active");
-    providerSelect.focus();
     if (window.updateProviderStatus) window.updateProviderStatus();
   }
 
@@ -525,146 +458,15 @@ function initSettingsModal() {
     }
   }
 
-  providerSelect.addEventListener("change", () => {
-    const provider = getSelectedProvider();
-    if (provider) {
-      setActiveProvider(provider.id);
-      populateFormFromProvider(provider);
-    }
-    updateDeleteButtonState();
-    if (window.updateProviderStatus) window.updateProviderStatus();
-  });
-
-  addProviderBtn.addEventListener("click", () => {
-    const newProvider = addProvider({ name: "New Provider" });
-    populateProviderDropdown();
-    populateFormFromProvider(newProvider);
-    providerSelect.value = newProvider.id;
-    updateDeleteButtonState();
-    setStatus("New provider added. Fill in the details and save.", "success");
-    if (window.updateProviderStatus) window.updateProviderStatus();
-  });
-
-  deleteProviderBtn.addEventListener("click", () => {
-    const provider = getSelectedProvider();
-    if (!provider) return;
-    if (settings.providers.length <= 1) {
-      setStatus("Cannot delete the last provider.", "error");
-      return;
-    }
-    const wasActive = provider.id === settings.activeProviderId;
-    deleteProvider(provider.id);
-    populateProviderDropdown();
-    const newActive = getActiveProvider();
-    populateFormFromProvider(newActive);
-    updateDeleteButtonState();
-    setStatus(`Provider "${provider.name}" deleted.`, "success");
-    if (window.updateProviderStatus) window.updateProviderStatus();
-  });
-
-  fetchModelsBtn.addEventListener("click", async () => {
-    const currentEndpoint = endpointInput.value.trim();
-    const rawApiKey = apiKeyInput.value;
-    const useExistingKey = apiKeyInput.dataset.hasKey === "true";
-    const provider = getSelectedProvider();
-    const actualApiKey = useExistingKey ? (provider?.apiKey || "") : rawApiKey;
-
-    if (!currentEndpoint) {
-      setStatus("Please enter an endpoint URL first.", "error");
-      endpointInput.focus();
-      return;
-    }
-
-    const modelsUrl = deriveModelsUrl(currentEndpoint);
-    setStatus("Fetching models...", "");
-
-    const models = await fetchModels(modelsUrl, actualApiKey);
-
-    if (models && models.length > 0) {
-      cacheModels(currentEndpoint, models);
-      populateModelSelect(models);
-      if (provider) modelSelect.value = provider.primaryModel || provider.model;
-      switchToSelectMode();
-      setStatus(`Found ${models.length} models.`, "success");
-    } else {
-      switchToInputMode();
-      if (provider) modelInput.value = provider.primaryModel || provider.model;
-      setStatus("Could not fetch models. Enter a model name manually.", "error");
-    }
-  });
-
-  // Support model toggle
-  if (supportModelToggle) {
-    supportModelToggle.addEventListener("change", () => {
-      if (supportModelToggle.checked) {
-        supportModelSection.style.display = "";
-        supportSameHint.style.display = "none";
-      } else {
-        supportModelSection.style.display = "none";
-        supportSameHint.style.display = "";
-      }
-    });
-  }
-
-  // Support endpoint radio
-  if (supportSameEndpointRadio && supportSeparateEndpointRadio) {
-    const updateSupportEndpointFields = () => {
-      const isSeparate = supportSeparateEndpointRadio.checked;
-      const endpointGroup = document.getElementById("support-endpoint-group");
-      const apiKeyGroup = document.getElementById("support-api-key-group");
-      if (endpointGroup) endpointGroup.style.display = isSeparate ? "" : "none";
-      if (apiKeyGroup) apiKeyGroup.style.display = isSeparate ? "" : "none";
-      if (isSeparate) {
-        supportApiKeyInput.dataset.hasKey = "false";
-        if (!supportApiKeyInput.value) supportApiKeyInput.value = "";
-      }
-    };
-    supportSameEndpointRadio.addEventListener("change", updateSupportEndpointFields);
-    supportSeparateEndpointRadio.addEventListener("change", updateSupportEndpointFields);
-  }
-
-  // Support fetch models
-  if (supportFetchModelsBtn) {
-    supportFetchModelsBtn.addEventListener("click", async () => {
-      const provider = getSelectedProvider();
-      if (!provider) return;
-
-      let fetchEndpoint, fetchApiKey;
-      const isSeparate = supportSeparateEndpointRadio && supportSeparateEndpointRadio.checked;
-
-      if (isSeparate) {
-        fetchEndpoint = supportEndpointUrl.value.trim();
-        const useExistingKey = supportApiKeyInput.dataset.hasKey === "true";
-        fetchApiKey = useExistingKey ? (provider?.apiKey || "") : supportApiKeyInput.value;
-      } else {
-        fetchEndpoint = provider.endpoint;
-        fetchApiKey = provider.apiKey;
-      }
-
-      if (!fetchEndpoint) {
-        setStatus("Please enter an endpoint URL first.", "error");
-        return;
-      }
-
-      const modelsUrl = deriveModelsUrl(fetchEndpoint);
-      setStatus("Fetching support models...", "");
-      const models = await fetchModels(modelsUrl, fetchApiKey);
-
-      if (models && models.length > 0) {
-        if (isSeparate) cacheModels(fetchEndpoint, models);
-        populateSupportModelSelect(models);
-        switchSupportToSelectMode();
-        setStatus(`Found ${models.length} support models.`, "success");
-      } else {
-        switchSupportToInputMode();
-        setStatus("Could not fetch support models. Enter a model name manually.", "error");
-      }
-    });
-  }
+  // --- Event Listeners ---
 
   openBtn.addEventListener("click", openModal);
   closeBtn.addEventListener("click", closeModal);
   overlay.addEventListener("click", closeModal);
+
+  modal.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeModal();
+  });
 
   themeSelect.addEventListener("change", () => {
     const theme = themeSelect.value;
@@ -686,34 +488,82 @@ function initSettingsModal() {
     }
   });
 
-  modelSelect.addEventListener("change", () => {
-    const provider = getSelectedProvider();
-    if (provider && modelSelect.value) {
-      provider.primaryModel = modelSelect.value;
-    }
-  });
-
-  // When user types in the API key field, mark it as a new key so it's saved on submit
   apiKeyInput.addEventListener("input", () => {
     apiKeyInput.dataset.hasKey = "false";
   });
 
-  modal.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeModal();
+  commentarySelect.addEventListener("change", () => {
+    setCommentaryModel(commentarySelect.value || null);
+    if (window.updateProviderStatus) window.updateProviderStatus();
+  });
+
+  prayerSelect.addEventListener("change", () => {
+    setPrayerModel(prayerSelect.value || null);
+    if (window.updateProviderStatus) window.updateProviderStatus();
+  });
+
+  refreshAllBtn.addEventListener("click", async () => {
+    setStatus("Fetching models from all providers...", "");
+    let totalModels = 0;
+    let failures = 0;
+
+    for (const provider of settings.providers) {
+      const modelsUrl = deriveModelsUrl(provider.endpoint);
+      const models = await fetchModels(modelsUrl, provider.apiKey);
+      if (models && models.length > 0) {
+        cacheModels(provider.endpoint, models);
+        totalModels += models.length;
+      } else {
+        failures++;
+      }
+    }
+
+    populateModelDropdowns();
+
+    if (failures === settings.providers.length) {
+      setStatus("Could not fetch models from any provider.", "error");
+    } else {
+      setStatus(`Found ${totalModels} models across ${settings.providers.length - failures} provider(s).`, "success");
+    }
+  });
+
+  addProviderBtn.addEventListener("click", () => {
+    const newProvider = addProvider({ name: "New Provider" });
+    populateProviderList();
+    populateProviderForm(newProvider);
+    updateDeleteButtonState();
+    setStatus("New provider added. Fill in the details and save.", "success");
+    if (window.updateProviderStatus) window.updateProviderStatus();
+  });
+
+  deleteProviderBtn.addEventListener("click", () => {
+    const provider = getSelectedProvider();
+    if (!provider) return;
+    if (settings.providers.length <= 1) {
+      setStatus("Cannot delete the last provider.", "error");
+      return;
+    }
+    deleteProvider(provider.id);
+    populateProviderList();
+    const newActive = getActiveProvider();
+    populateProviderForm(newActive);
+    updateDeleteButtonState();
+    setStatus(`Provider "${provider.name}" deleted.`, "success");
+    if (window.updateProviderStatus) window.updateProviderStatus();
   });
 
   resetBtn.addEventListener("click", () => {
     settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-    availableModels = [];
     clearCachedModels();
     saveSettingsLocally();
-    populateProviderDropdown();
+    populateProviderList();
     const active = getActiveProvider();
-    populateFormFromProvider(active);
+    populateProviderForm(active);
     updateDeleteButtonState();
     if (prayerSignatureInput) {
       prayerSignatureInput.value = getPrayerSignature();
     }
+    populateModelDropdowns();
     setStatus("Settings reset to defaults.", "success");
   });
 
@@ -722,8 +572,6 @@ function initSettingsModal() {
 
     const newEndpoint = endpointInput.value.trim();
     const rawApiKey = apiKeyInput.value;
-
-    savePrimaryModelFromUI();
 
     const useExistingKey = apiKeyInput.dataset.hasKey === "true";
     const provider = getSelectedProvider();
@@ -736,33 +584,10 @@ function initSettingsModal() {
     }
 
     if (provider) {
-      const primaryModel = getSavedPrimaryModel();
-
-      // Build support model config
-      let supportModel = null;
-      if (supportModelToggle && supportModelToggle.checked) {
-        const sm = saveSupportModelFromUI();
-        if (sm) {
-          if (supportSameEndpointRadio && supportSameEndpointRadio.checked) {
-            supportModel = { model: sm };
-          } else {
-            supportModel = {
-              model: sm,
-              endpoint: supportEndpointUrl.value.trim(),
-              apiKey: supportApiKeyInput.dataset.hasKey === "true"
-                ? provider.apiKey
-                : supportApiKeyInput.value.trim()
-            };
-          }
-        }
-      }
-
       updateProvider(provider.id, {
         name: providerNameInput.value.trim() || "Unnamed Provider",
         endpoint: newEndpoint,
-        apiKey: actualApiKey,
-        primaryModel,
-        supportModel
+        apiKey: actualApiKey
       });
     }
 
@@ -781,6 +606,8 @@ function initSettingsModal() {
       if (window.updatePrayerSignatureDisplay) window.updatePrayerSignatureDisplay();
     }
   });
+
+  renderSettingsSidebar();
 }
 
 if (document.readyState === "loading") {
