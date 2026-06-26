@@ -10,7 +10,8 @@ const DEFAULT_SETTINGS = {
       name: "Default Provider",
       endpoint: "https://api.openai.com/v1/chat/completions",
       apiKey: "",
-      model: "gpt-4o"
+      primaryModel: "gpt-4o",
+      supportModel: null
     }
   ],
   activeProviderId: "default",
@@ -22,13 +23,24 @@ let availableModels = [];
 
 function migrateOldSettings(oldSettings) {
   if (!oldSettings || !oldSettings.endpoint) return null;
+  if (Array.isArray(oldSettings.providers)) {
+    return {
+      ...oldSettings,
+      providers: oldSettings.providers.map(p => ({
+        ...p,
+        primaryModel: p.primaryModel || p.model || "gpt-4o",
+        supportModel: p.supportModel ?? null
+      }))
+    };
+  }
   return {
     providers: [{
       id: "default",
       name: "Default Provider",
       endpoint: oldSettings.endpoint,
       apiKey: oldSettings.apiKey || "",
-      model: oldSettings.model || "gpt-4o"
+      primaryModel: oldSettings.model || "gpt-4o",
+      supportModel: null
     }],
     activeProviderId: "default",
     prayerSignature: oldSettings.prayerSignature || "\u2014 Bible Companion"
@@ -54,7 +66,11 @@ export function getSettings() {
 }
 
 export function getActiveProvider() {
-  return getProviderById(settings.activeProviderId) || settings.providers[0] || null;
+  const provider = getProviderById(settings.activeProviderId) || settings.providers[0] || null;
+  if (provider && !provider.primaryModel && provider.model) {
+    provider.primaryModel = provider.model;
+  }
+  return provider;
 }
 
 export function getProviderById(id) {
@@ -68,6 +84,28 @@ export function getPrayerSignature() {
 export function setPrayerSignature(val) {
   settings.prayerSignature = val ?? "\u2014 Bible Companion";
   saveSettingsLocally();
+}
+
+export function getSupportConfig() {
+  const provider = getActiveProvider();
+  if (!provider) return null;
+
+  const sm = provider.supportModel;
+  if (!sm) {
+    return {
+      model: provider.primaryModel || provider.model,
+      endpoint: provider.endpoint,
+      apiKey: provider.apiKey,
+      name: provider.name
+    };
+  }
+
+  return {
+    model: sm.model,
+    endpoint: sm.endpoint || provider.endpoint,
+    apiKey: sm.apiKey !== undefined ? sm.apiKey : provider.apiKey,
+    name: sm.endpoint ? "Separate" : provider.name
+  };
 }
 
 export function setApiKey(key) {
@@ -174,20 +212,67 @@ function switchToInputMode() {
   document.getElementById("model-name").style.display = "";
 }
 
-function saveModelFromUI() {
+function populateSupportModelSelect(models) {
+  const select = document.getElementById("support-model-select");
+  select.innerHTML = '<option value="">-- Select a model --</option>';
+  models.forEach(id => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    select.appendChild(opt);
+  });
+}
+
+function switchSupportToSelectMode() {
+  document.getElementById("support-model-select").style.display = "";
+  document.getElementById("support-model-name").style.display = "none";
+}
+
+function switchSupportToInputMode() {
+  document.getElementById("support-model-select").style.display = "none";
+  document.getElementById("support-model-name").style.display = "";
+}
+
+function savePrimaryModelFromUI() {
   const select = document.getElementById("model-select");
   const input = document.getElementById("model-name");
   const provider = getProviderById(document.getElementById("provider-select").value);
   if (provider) {
     if (select.style.display !== "none" && select.value) {
-      provider.model = select.value;
+      provider.primaryModel = select.value;
     } else if (input.style.display !== "none" && input.value.trim()) {
-      provider.model = input.value.trim();
+      provider.primaryModel = input.value.trim();
     }
   }
 }
 
-function getSavedModel() {
+function getPrimaryModelFromUI() {
+  const select = document.getElementById("model-select");
+  const input = document.getElementById("model-name");
+  if (select.style.display !== "none" && select.value) {
+    return select.value;
+  }
+  if (input.style.display !== "none" && input.value.trim()) {
+    return input.value.trim();
+  }
+  return null;
+}
+
+function saveSupportModelFromUI() {
+  const select = document.getElementById("support-model-select");
+  const input = document.getElementById("support-model-name");
+  const provider = getProviderById(document.getElementById("provider-select").value);
+  if (provider) {
+    if (select && select.style.display !== "none" && select.value) {
+      return select.value;
+    } else if (input && input.style.display !== "none" && input.value.trim()) {
+      return input.value.trim();
+    }
+  }
+  return null;
+}
+
+function getSavedPrimaryModel() {
   const select = document.getElementById("model-select");
   const input = document.getElementById("model-name");
   if (select.style.display !== "none" && select.value) {
@@ -245,7 +330,8 @@ function addProvider(data) {
     name: data.name || "New Provider",
     endpoint: data.endpoint || "",
     apiKey: data.apiKey || "",
-    model: data.model || "gpt-4o"
+    primaryModel: data.primaryModel || "gpt-4o",
+    supportModel: null
   };
   settings.providers.push(provider);
   settings.activeProviderId = id;
@@ -270,7 +356,8 @@ function updateProvider(id, data) {
   if (!provider) return false;
   if (data.endpoint !== undefined) provider.endpoint = data.endpoint;
   if (data.apiKey !== undefined) provider.apiKey = data.apiKey;
-  if (data.model !== undefined) provider.model = data.model;
+  if (data.primaryModel !== undefined) provider.primaryModel = data.primaryModel;
+  if (data.supportModel !== undefined) provider.supportModel = data.supportModel;
   if (data.name !== undefined) provider.name = data.name;
   saveSettingsLocally();
   return true;
@@ -303,6 +390,16 @@ function initSettingsModal() {
   const fetchModelsBtn = document.getElementById("fetch-models-btn");
   const addProviderBtn = document.getElementById("add-provider-btn");
   const deleteProviderBtn = document.getElementById("delete-provider-btn");
+  const supportModelToggle = document.getElementById("support-model-toggle");
+  const supportModelSection = document.getElementById("support-model-section");
+  const supportSameEndpointRadio = document.getElementById("support-same-endpoint-radio");
+  const supportSeparateEndpointRadio = document.getElementById("support-separate-endpoint-radio");
+  const supportEndpointUrl = document.getElementById("support-endpoint-url");
+  const supportApiKeyInput = document.getElementById("support-api-key");
+  const supportModelSelect = document.getElementById("support-model-select");
+  const supportModelName = document.getElementById("support-model-name");
+  const supportFetchModelsBtn = document.getElementById("support-fetch-models-btn");
+  const supportSameHint = document.getElementById("support-same-hint");
 
   function populateProviderDropdown() {
     providerSelect.innerHTML = "";
@@ -330,14 +427,57 @@ function initSettingsModal() {
       apiKeyInput.value = "";
       apiKeyInput.dataset.hasKey = "false";
     }
+    const pm = provider.primaryModel || provider.model;
     const cached = getCachedModelsForEndpoint(provider.endpoint);
     if (cached && cached.length > 0) {
       populateModelSelect(cached);
-      modelSelect.value = provider.model;
+      modelSelect.value = pm;
       switchToSelectMode();
     } else {
       switchToInputMode();
-      modelInput.value = provider.model;
+      modelInput.value = pm;
+    }
+
+    // Support model
+    if (!supportModelToggle) return;
+    const sm = provider.supportModel;
+    if (sm) {
+      supportModelToggle.checked = true;
+      supportModelSection.style.display = "";
+      supportSameHint.style.display = "none";
+
+      if (sm.endpoint) {
+        supportSeparateEndpointRadio.checked = true;
+        supportEndpointUrl.style.display = "";
+        supportEndpointUrl.value = sm.endpoint || "";
+        if (sm.apiKey) {
+          supportApiKeyInput.value = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
+          supportApiKeyInput.dataset.hasKey = "true";
+        } else {
+          supportApiKeyInput.value = "";
+          supportApiKeyInput.dataset.hasKey = "false";
+        }
+      } else {
+        supportSameEndpointRadio.checked = true;
+        const eg = document.getElementById("support-endpoint-group");
+        const ak = document.getElementById("support-api-key-group");
+        if (eg) eg.style.display = "none";
+        if (ak) ak.style.display = "none";
+      }
+
+      const smCached = getCachedModelsForEndpoint(sm.endpoint || provider.endpoint);
+      if (smCached && smCached.length > 0) {
+        populateSupportModelSelect(smCached);
+        supportModelSelect.value = sm.model;
+        switchSupportToSelectMode();
+      } else {
+        switchSupportToInputMode();
+        supportModelName.value = sm.model;
+      }
+    } else {
+      supportModelToggle.checked = false;
+      supportModelSection.style.display = "none";
+      supportSameHint.style.display = "";
     }
   }
 
@@ -443,15 +583,84 @@ function initSettingsModal() {
     if (models && models.length > 0) {
       cacheModels(currentEndpoint, models);
       populateModelSelect(models);
-      if (provider) modelSelect.value = provider.model;
+      if (provider) modelSelect.value = provider.primaryModel || provider.model;
       switchToSelectMode();
       setStatus(`Found ${models.length} models.`, "success");
     } else {
       switchToInputMode();
-      if (provider) modelInput.value = provider.model;
+      if (provider) modelInput.value = provider.primaryModel || provider.model;
       setStatus("Could not fetch models. Enter a model name manually.", "error");
     }
   });
+
+  // Support model toggle
+  if (supportModelToggle) {
+    supportModelToggle.addEventListener("change", () => {
+      if (supportModelToggle.checked) {
+        supportModelSection.style.display = "";
+        supportSameHint.style.display = "none";
+      } else {
+        supportModelSection.style.display = "none";
+        supportSameHint.style.display = "";
+      }
+    });
+  }
+
+  // Support endpoint radio
+  if (supportSameEndpointRadio && supportSeparateEndpointRadio) {
+    const updateSupportEndpointFields = () => {
+      const isSeparate = supportSeparateEndpointRadio.checked;
+      const endpointGroup = document.getElementById("support-endpoint-group");
+      const apiKeyGroup = document.getElementById("support-api-key-group");
+      if (endpointGroup) endpointGroup.style.display = isSeparate ? "" : "none";
+      if (apiKeyGroup) apiKeyGroup.style.display = isSeparate ? "" : "none";
+      if (isSeparate) {
+        supportApiKeyInput.dataset.hasKey = "false";
+        if (!supportApiKeyInput.value) supportApiKeyInput.value = "";
+      }
+    };
+    supportSameEndpointRadio.addEventListener("change", updateSupportEndpointFields);
+    supportSeparateEndpointRadio.addEventListener("change", updateSupportEndpointFields);
+  }
+
+  // Support fetch models
+  if (supportFetchModelsBtn) {
+    supportFetchModelsBtn.addEventListener("click", async () => {
+      const provider = getSelectedProvider();
+      if (!provider) return;
+
+      let fetchEndpoint, fetchApiKey;
+      const isSeparate = supportSeparateEndpointRadio && supportSeparateEndpointRadio.checked;
+
+      if (isSeparate) {
+        fetchEndpoint = supportEndpointUrl.value.trim();
+        const useExistingKey = supportApiKeyInput.dataset.hasKey === "true";
+        fetchApiKey = useExistingKey ? (provider?.apiKey || "") : supportApiKeyInput.value;
+      } else {
+        fetchEndpoint = provider.endpoint;
+        fetchApiKey = provider.apiKey;
+      }
+
+      if (!fetchEndpoint) {
+        setStatus("Please enter an endpoint URL first.", "error");
+        return;
+      }
+
+      const modelsUrl = deriveModelsUrl(fetchEndpoint);
+      setStatus("Fetching support models...", "");
+      const models = await fetchModels(modelsUrl, fetchApiKey);
+
+      if (models && models.length > 0) {
+        if (isSeparate) cacheModels(fetchEndpoint, models);
+        populateSupportModelSelect(models);
+        switchSupportToSelectMode();
+        setStatus(`Found ${models.length} support models.`, "success");
+      } else {
+        switchSupportToInputMode();
+        setStatus("Could not fetch support models. Enter a model name manually.", "error");
+      }
+    });
+  }
 
   openBtn.addEventListener("click", openModal);
   closeBtn.addEventListener("click", closeModal);
@@ -480,7 +689,7 @@ function initSettingsModal() {
   modelSelect.addEventListener("change", () => {
     const provider = getSelectedProvider();
     if (provider && modelSelect.value) {
-      provider.model = modelSelect.value;
+      provider.primaryModel = modelSelect.value;
     }
   });
 
@@ -514,7 +723,7 @@ function initSettingsModal() {
     const newEndpoint = endpointInput.value.trim();
     const rawApiKey = apiKeyInput.value;
 
-    saveModelFromUI();
+    savePrimaryModelFromUI();
 
     const useExistingKey = apiKeyInput.dataset.hasKey === "true";
     const provider = getSelectedProvider();
@@ -527,11 +736,33 @@ function initSettingsModal() {
     }
 
     if (provider) {
+      const primaryModel = getSavedPrimaryModel();
+
+      // Build support model config
+      let supportModel = null;
+      if (supportModelToggle && supportModelToggle.checked) {
+        const sm = saveSupportModelFromUI();
+        if (sm) {
+          if (supportSameEndpointRadio && supportSameEndpointRadio.checked) {
+            supportModel = { model: sm };
+          } else {
+            supportModel = {
+              model: sm,
+              endpoint: supportEndpointUrl.value.trim(),
+              apiKey: supportApiKeyInput.dataset.hasKey === "true"
+                ? provider.apiKey
+                : supportApiKeyInput.value.trim()
+            };
+          }
+        }
+      }
+
       updateProvider(provider.id, {
         name: providerNameInput.value.trim() || "Unnamed Provider",
         endpoint: newEndpoint,
         apiKey: actualApiKey,
-        model: getSavedModel()
+        primaryModel,
+        supportModel
       });
     }
 

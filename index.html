@@ -173,6 +173,12 @@
           <select id="provider-select">
           </select>
         </div>
+
+        <div class="settings-section-header primary-section">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          <span>Primary Model — Bible Commentary</span>
+        </div>
+
         <div class="form-group">
           <label for="provider-name">Provider Name</label>
           <input type="text" id="provider-name" placeholder="Default Provider" required>
@@ -180,7 +186,7 @@
         <div class="form-group">
           <label for="endpoint-url">Endpoint URL</label>
           <input type="url" id="endpoint-url" placeholder="https://api.openai.com/v1/chat/completions" required>
-          <small class="form-hint">OpenAI-compatible /.chat/completions endpoint</small>
+          <small class="form-hint">OpenAI-compatible /chat/completions endpoint</small>
         </div>
         <div class="form-group">
           <label for="api-key">API Key</label>
@@ -204,6 +210,60 @@
           </div>
           <small class="form-hint">Fetch models from your endpoint, or type a model name manually.</small>
         </div>
+
+        <div class="settings-section-header support-section">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 4-6.4 3.2 0-.5 3.4 3 3.4"/><path d="M12 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
+          <span>Support Model — Prayer Formatting</span>
+        </div>
+
+        <div class="support-toggle-row">
+          <input type="checkbox" id="support-model-toggle">
+          <label for="support-model-toggle">Use different model for prayer formatting</label>
+        </div>
+        <div id="support-same-hint" class="form-hint" style="display: none;">Prayer formatting will use the Primary model.</div>
+
+        <div id="support-model-section" style="display: none;">
+          <div class="endpoint-radio-group">
+            <label>
+              <input type="radio" name="support-endpoint" id="support-same-endpoint-radio" value="same" checked>
+              Same provider endpoint
+            </label>
+            <label>
+              <input type="radio" name="support-endpoint" id="support-separate-endpoint-radio" value="separate">
+              Separate endpoint
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label for="support-model-name">Model</label>
+            <div class="model-selector-row">
+              <select id="support-model-select" style="display:none;">
+                <option value="">-- Select a model --</option>
+              </select>
+              <input type="text" id="support-model-name" style="display:none;" placeholder="gpt-4o-mini">
+              <button type="button" id="support-fetch-models-btn" title="Fetch available models" class="icon-btn-models">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <polyline points="1 20 1 14 7 14"></polyline>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group support-field-conditional" id="support-endpoint-group" style="display: none;">
+            <label for="support-endpoint-url">Endpoint URL</label>
+            <input type="url" id="support-endpoint-url" placeholder="https://api.example.com/v1/chat/completions">
+          </div>
+          <div class="form-group support-field-conditional" id="support-api-key-group" style="display: none;">
+            <label for="support-api-key">API Key</label>
+            <input type="password" id="support-api-key" placeholder="sk-...">
+            <small class="form-hint">API key for the separate support endpoint.</small>
+          </div>
+
+          <small class="form-hint">Support model is used for AI prayer request formatting.</small>
+        </div>
+
         <div id="connection-status" class="status-message"></div>
         <div class="form-actions provider-actions">
           <button type="button" id="add-provider-btn" class="btn-secondary">Add Provider</button>

@@ -20,7 +20,7 @@ Your purpose is to provide commentary on Bible passages.
 - **Accuracy:** Ensure responses are unbiased, positive, and accurate.`;
 
 import { loadBibleData, isLoaded, getBooks, getOldTestament, getNewTestament, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference, goNextChapter, goPrevChapter } from "./bible.js";
-import { loadSettingsLocally, getActiveProvider, getPrayerSignature } from "./settings.js";
+import { loadSettingsLocally, getActiveProvider, getSupportConfig, getPrayerSignature } from "./settings.js";
 
 const INTENT_PROMPTS = {
   commentary: "Provide a detailed theological commentary on the selected passage. Use Southern Baptist theological perspectives and explain the text clearly.",
@@ -221,10 +221,21 @@ window.updateProviderStatus = updateProviderStatus;
 
 function updateProviderStatus() {
   const provider = getActiveProvider();
+  const support = getSupportConfig();
   const el = document.getElementById("provider-status");
   if (!el || !provider) return;
-  el.innerHTML = `<span class="provider-status-dot"></span><span>${provider.name} / ${provider.model}</span>`;
-  el.title = `Provider: ${provider.name}\nModel: ${provider.model}`;
+
+  const primaryModel = provider.primaryModel || provider.model;
+  const supportModel = support ? support.model : primaryModel;
+  const sameModel = primaryModel === supportModel;
+
+  if (sameModel) {
+    el.innerHTML = `<span class="provider-status-dot"></span><span>${provider.name} / ${primaryModel}</span>`;
+    el.title = `Primary: ${primaryModel}\nSupport: ${supportModel} (same)`;
+  } else {
+    el.innerHTML = `<span class="provider-status-dot"></span><span>${provider.name} / ${primaryModel} | ${supportModel}</span>`;
+    el.title = `Primary (Commentary): ${primaryModel}\nSupport (Prayer): ${supportModel}`;
+  }
 }
 
 /* --- Splitter --- */
@@ -726,7 +737,7 @@ async function sendToAI() {
   tab.aiTitle = `AI: ${intentLabel}`;
 
   const requestBody = {
-    model: provider.model,
+    model: provider.primaryModel || provider.model,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: finalPrompt }
@@ -737,7 +748,7 @@ async function sendToAI() {
 
   console.log("[ai] AI request body", {
     provider: provider.name,
-    model: provider.model,
+    model: provider.primaryModel || provider.model,
     messageCount: requestBody.messages.length,
     systemPromptLength: requestBody.messages[0].content.length,
     userPromptLength: requestBody.messages[1].content.length,
@@ -763,7 +774,7 @@ async function sendToAI() {
     }, REQUEST_TIMEOUT);
 
     headers["Cache-Control"] = "no-cache";
-    console.log("[ai] request started", { model: provider.model, promptLength: finalPrompt.length });
+    console.log("[ai] request started", { model: provider.primaryModel || provider.model, promptLength: finalPrompt.length });
 
     const response = await fetch(provider.endpoint, {
       method: "POST",
@@ -920,7 +931,7 @@ async function sendToAI() {
       if (!fullText) {
         console.warn("[ai] empty response after streaming", {
           streamedChunks,
-          model: provider.model,
+          model: provider.primaryModel || provider.model,
           endpoint: provider.endpoint,
           contentType
         });
@@ -1293,8 +1304,8 @@ async function enhancePrayerWithAI() {
     showPrayerStatus("Nothing to enhance");
     return;
   }
-  const provider = getActiveProvider();
-  if (!provider) {
+  const supportConfig = getSupportConfig();
+  if (!supportConfig) {
     showPrayerStatus("No AI provider configured");
     return;
   }
@@ -1306,7 +1317,7 @@ async function enhancePrayerWithAI() {
   showPrayerStatus("Enhancing with AI...");
 
   const requestBody = {
-    model: provider.model,
+    model: supportConfig.model,
     messages: [
       { role: "system", content: PRAYER_SYSTEM_PROMPT },
       { role: "user", content: userPrompt }
@@ -1316,8 +1327,8 @@ async function enhancePrayerWithAI() {
   };
 
   console.log("[prayer] AI request body", {
-    provider: provider.name,
-    model: provider.model,
+    provider: supportConfig.name,
+    model: supportConfig.model,
     messageCount: requestBody.messages.length,
     systemPromptLength: requestBody.messages[0].content.length,
     userPromptLength: requestBody.messages[1].content.length,
@@ -1329,8 +1340,8 @@ async function enhancePrayerWithAI() {
     const headers = {
       "Content-Type": "application/json"
     };
-    if (provider.apiKey) {
-      headers["Authorization"] = `Bearer ${provider.apiKey}`;
+    if (supportConfig.apiKey) {
+      headers["Authorization"] = `Bearer ${supportConfig.apiKey}`;
     }
 
     const REQUEST_TIMEOUT = 120000; // 120 seconds
@@ -1343,9 +1354,9 @@ async function enhancePrayerWithAI() {
     }, REQUEST_TIMEOUT);
 
     headers["Cache-Control"] = "no-cache";
-    console.log("[prayer] AI request started", { model: provider.model, textLength: text.length });
+    console.log("[prayer] AI request started", { model: supportConfig.model, textLength: text.length });
 
-    const response = await fetch(provider.endpoint, {
+    const response = await fetch(supportConfig.endpoint, {
       method: "POST",
       headers: { ...headers, "Accept": "text/event-stream" },
       body: JSON.stringify({ ...requestBody, stream: true }),
@@ -1524,8 +1535,8 @@ async function enhancePrayerWithAI() {
         fullTextLength: fullText.length,
         reasoningBufferLength: reasoningBuffer.length,
         sawReasoningContent,
-        model: provider.model,
-        endpoint: provider.endpoint,
+        model: supportConfig.model,
+        endpoint: supportConfig.endpoint,
         contentType
       });
       if (sawReasoningContent) {
