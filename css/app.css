@@ -175,9 +175,9 @@ header#app-header {
   display: flex;
   align-items: stretch;
   background: var(--parchment);
-  border-bottom: 2px solid var(--border-dark);
+  border-bottom: none;
   flex-shrink: 0;
-  padding: 0;
+  padding: 0 2px;
   overflow-x: auto;
   overflow-y: hidden;
   min-height: 34px;
@@ -196,14 +196,21 @@ header#app-header {
   font-family: "Times New Roman", Times, Georgia, serif;
   color: var(--text-secondary);
   background: var(--parchment-dark);
-  border-top: 2px solid var(--bevel-light);
-  border-left: 1px solid var(--bevel-light);
-  border-right: 1px solid var(--bevel-dark);
+  border: none;
+  border-top: 3px solid var(--bevel-light);
+  border-radius: 8px 8px 0 0;
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: color 0.1s, background 0.1s;
+  margin-right: 2px;
+  transition: color 0.15s, background 0.15s, box-shadow 0.15s;
+  position: relative;
+  box-shadow: 0 -1px 3px rgba(0,0,0,0.06);
+}
+
+.tab-item:last-child {
+  margin-right: 0;
 }
 
 .tab-item.active {
@@ -212,7 +219,18 @@ header#app-header {
   font-weight: 700;
   border-top: 3px solid var(--gold);
   border-bottom: none;
-  box-shadow: inset 0 -2px 0 var(--border-dark);
+  box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+}
+
+.tab-item.active::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--bible-bg);
+  z-index: 1;
 }
 
 .tab-item:not(.active):hover {
@@ -221,9 +239,8 @@ header#app-header {
 }
 
 .tab-item:not(.active):active {
-  border-top: 2px solid var(--bevel-dark);
-  border-left: 1px solid var(--bevel-dark);
-  border-right: 1px solid var(--bevel-light);
+  background: var(--parchment-dark);
+  box-shadow: 0 -1px 1px rgba(0,0,0,0.04);
 }
 
 .tab-title {
@@ -267,6 +284,91 @@ header#app-header {
   font-size: 1rem;
   font-weight: 700;
   padding: 0;
+  background: var(--parchment);
+  border: none;
+  border-top: 3px solid var(--bevel-light);
+  border-radius: 8px 8px 0 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, box-shadow 0.15s;
+  position: relative;
+  box-shadow: 0 -1px 3px rgba(0,0,0,0.06);
+}
+
+#add-tab-btn:hover {
+  color: var(--gold);
+  background: var(--parchment);
+}
+
+/* --- Mode Tab Switcher (Physical Folder Tabs) --- */
+
+#mode-tabs {
+  display: flex;
+  align-items: stretch;
+  background: var(--parchment);
+  border-bottom: 2px solid var(--border-dark);
+  flex-shrink: 0;
+  padding: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 1rem;
+  font-size: 0.82rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--parchment-dark);
+  border: none;
+  border-top: 3px solid var(--bevel-light);
+  border-radius: 10px 10px 0 0;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, box-shadow 0.15s;
+  position: relative;
+  margin-right: 1px;
+  box-shadow: 0 -1px 2px rgba(0,0,0,0.05);
+}
+
+.mode-tab:last-child {
+  margin-right: 0;
+}
+
+.mode-tab svg {
+  flex-shrink: 0;
+}
+
+.mode-tab:hover {
+  background: var(--parchment);
+  color: var(--gold-light);
+}
+
+.mode-tab.active {
+  background: var(--bible-bg);
+  color: var(--text-primary);
+  border-top: 3px solid var(--gold);
+  box-shadow: 0 -2px 4px rgba(0,0,0,0.08);
+}
+
+.mode-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--bible-bg);
+  z-index: 1;
+}
+
+.mode-tab:not(.active) {
+  box-shadow: 0 -1px 2px rgba(0,0,0,0.05);
 }
 
 /* --- Main Content / Split Layout --- */
@@ -1755,31 +1857,6 @@ header#app-header {
   display: none !important;
 }
 
-.prayer-mode-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.75rem;
-  background: var(--parchment);
-  border-bottom: 1px solid var(--border-light);
-  flex-shrink: 0;
-}
-
-.prayer-status {
-  font-size: 0.7rem;
-  color: var(--success);
-  font-family: "Times New Roman", Times, Georgia, serif;
-  font-style: italic;
-  transition: opacity 0.3s ease;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.prayer-toggle-btn.prayer-active {
-  background: var(--gold-light);
-  color: var(--navy);
-}
-
 .prayer-editor {
   display: flex;
   flex-direction: column;
@@ -2022,9 +2099,6 @@ header#app-header {
   font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-[data-theme="modern"] .prayer-status {
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-}
 
 [data-theme="modern"] .prayer-split-container {
   background: var(--bible-bg);

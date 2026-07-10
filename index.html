@@ -26,15 +26,19 @@
 
     <main id="main-content">
       <div id="tab-bar"></div>
-      <div id="prayer-mode-bar" class="prayer-mode-bar">
-        <button id="prayer-toggle-btn" class="icon-btn" aria-label="Prayer Companion" title="Prayer Companion">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M7 20h10"/>
-            <path d="M10 20c5.5-2.5.8-6.4 4-6.4 3.2 0-.5 3.4 3 3.4"/>
-            <path d="M12 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+      <div id="mode-tabs" class="mode-tabs">
+        <button id="mode-bible-tab" class="mode-tab active" aria-label="Bible Reader">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
           </svg>
+          <span>Bible</span>
         </button>
-        <span class="prayer-status" id="prayer-status"></span>
+        <button id="mode-prayer-tab" class="mode-tab" aria-label="Prayer Companion">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 4-6.4 3.2 0-.5 3.4 3 3.4"/><path d="M12 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+          </svg>
+          <span>Prayer</span>
+        </button>
       </div>
       <div id="split-container">
         <section id="bible-reader">

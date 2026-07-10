@@ -1190,15 +1190,20 @@ function registerServiceWorker() {
 
 // --- Prayer Companion Mode ---
 
-function togglePrayerMode() {
-  isPrayerMode = !isPrayerMode;
+function switchMode(mode) {
+  const wasPrayerMode = isPrayerMode;
+  isPrayerMode = mode === "prayer";
   const splitContainer = document.getElementById("split-container");
   const bibleReader = document.getElementById("bible-reader");
   const splitter = document.getElementById("splitter");
   const navigationBar = document.getElementById("navigation-bar");
   const aiPanel = document.getElementById("ai-panel");
   const prayerEditor = document.getElementById("prayer-editor");
-  const prayerToggleBtn = document.getElementById("prayer-toggle-btn");
+  const bibleTab = document.getElementById("mode-bible-tab");
+  const prayerTab = document.getElementById("mode-prayer-tab");
+
+  bibleTab.classList.toggle("active", mode === "bible");
+  prayerTab.classList.toggle("active", mode === "prayer");
 
   if (isPrayerMode) {
     bibleReader.classList.add("hidden");
@@ -1206,9 +1211,6 @@ function togglePrayerMode() {
     navigationBar.classList.add("hidden");
     aiPanel.classList.add("hidden");
     prayerEditor.classList.remove("hidden");
-    prayerToggleBtn.classList.add("prayer-active");
-    prayerToggleBtn.setAttribute("aria-label", "Exit Prayer Companion");
-    prayerToggleBtn.title = "Exit Prayer Companion";
     restorePrayerText();
   } else {
     bibleReader.classList.remove("hidden");
@@ -1216,9 +1218,6 @@ function togglePrayerMode() {
     navigationBar.classList.remove("hidden");
     aiPanel.classList.remove("hidden");
     prayerEditor.classList.add("hidden");
-    prayerToggleBtn.classList.remove("prayer-active");
-    prayerToggleBtn.setAttribute("aria-label", "Prayer Companion");
-    prayerToggleBtn.title = "Prayer Companion";
   }
 }
 
@@ -1246,7 +1245,17 @@ function updatePrayerPreview() {
 }
 
 function showPrayerStatus(msg) {
-  const status = document.getElementById("prayer-status");
+  let status = document.getElementById("prayer-status");
+  if (!status) {
+    status = document.createElement("span");
+    status.id = "prayer-status";
+    status.className = "prayer-status";
+    status.textContent = msg;
+    const toolbar = document.getElementById("prayer-toolbar");
+    if (toolbar) {
+      toolbar.parentElement.insertBefore(status, toolbar.nextSibling);
+    }
+  }
   status.textContent = msg;
   status.style.opacity = "1";
   clearTimeout(status._hideTimeout);
@@ -1604,14 +1613,16 @@ function updateUndoButton() {
 }
 
 function initPrayerMode() {
-  const prayerToggleBtn = document.getElementById("prayer-toggle-btn");
+  const bibleTab = document.getElementById("mode-bible-tab");
+  const prayerTab = document.getElementById("mode-prayer-tab");
   const prayerTextarea = document.getElementById("prayer-textarea");
   const prayerCopyBtn = document.getElementById("prayer-copy-btn");
   const prayerSaveBtn = document.getElementById("prayer-save-btn");
   const enhanceBtn = document.getElementById("enhance-prayer-btn");
   const undoBtn = document.getElementById("undo-prayer-btn");
 
-  prayerToggleBtn.addEventListener("click", togglePrayerMode);
+  bibleTab.addEventListener("click", () => switchMode("bible"));
+  prayerTab.addEventListener("click", () => switchMode("prayer"));
   prayerCopyBtn.addEventListener("click", copyPrayerToClipboard);
   prayerSaveBtn.addEventListener("click", savePrayerText);
   if (enhanceBtn) enhanceBtn.addEventListener("click", enhancePrayerWithAI);
