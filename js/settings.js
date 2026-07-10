@@ -81,13 +81,17 @@ function hasNewModelFields(data) {
 }
 
 window.loadSettings = function(s) {
+  console.log("[settings] loadSettings called with:", s);
   if (s && !isNewFormat(s)) {
     s = migrateOldSettings(s);
+    console.log("[settings] After old settings migration:", s);
   }
   if (s && isNewFormat(s) && !hasNewModelFields(s)) {
     s = migrateModelsToSettings(s);
+    console.log("[settings] After model migration:", s);
   }
   settings = s || JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  console.log("[settings] settings set to:", settings);
   window.settings = settings;
 };
 
@@ -165,8 +169,10 @@ export function buildAggregatedModelList() {
 export function loadSettingsLocally() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
+    console.log("[settings] Loading from localStorage, raw:", raw);
     if (raw) {
       const parsed = JSON.parse(raw);
+      console.log("[settings] Parsed settings:", parsed);
       if (!isNewFormat(parsed)) {
         const migrated = migrateOldSettings(parsed);
         if (migrated) return migrateModelsToSettings(migrated);
@@ -189,7 +195,9 @@ export function loadSettingsLocally() {
 function saveSettingsLocally() {
   try {
     const toSave = JSON.stringify(settings);
+    console.log("[settings] Saving to localStorage:", toSave);
     localStorage.setItem(STORAGE_KEY, toSave);
+    console.log("[settings] Verifying saved data:", JSON.parse(localStorage.getItem(STORAGE_KEY)));
   } catch (e) {
     console.error("[settings] Failed to save settings to localStorage:", e);
   }
@@ -258,15 +266,18 @@ function clearCachedModels() {
 }
 
 function addProvider(data) {
+  console.log("[settings] addProvider called with:", data);
   const id = data.id || `provider_${Date.now()}`;
   const provider = {
     id,
-    name: data.name || "New Provider",
+    name: data.name || "",
     endpoint: data.endpoint || "",
     apiKey: data.apiKey || ""
   };
+  console.log("[settings] Created provider:", provider);
   settings.providers.push(provider);
   settings.activeProviderId = id;
+  console.log("[settings] providers array before save:", settings.providers);
   saveSettingsLocally();
   return provider;
 }
@@ -371,6 +382,13 @@ function initSettingsModal() {
   function populateProviderList() {
     if (!providerListEl) return;
     providerListEl.innerHTML = "";
+    if (settings.providers.length === 0) {
+      const placeholder = document.createElement("p");
+      placeholder.className = "settings-no-providers";
+      placeholder.textContent = "No providers configured.";
+      providerListEl.appendChild(placeholder);
+      return;
+    }
     for (const p of settings.providers) {
       const card = document.createElement("div");
       card.className = "settings-provider-card" + (p.id === settings.activeProviderId ? " active" : "");
@@ -528,7 +546,7 @@ function initSettingsModal() {
   });
 
   addProviderBtn.addEventListener("click", () => {
-    const newProvider = addProvider({ name: "New Provider" });
+    const newProvider = addProvider({});
     populateProviderList();
     populateProviderForm(newProvider);
     updateDeleteButtonState();

@@ -1620,6 +1620,13 @@ header#app-header {
   margin-bottom: 1rem;
 }
 
+.settings-no-providers {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 0.5rem 0;
+}
+
 .settings-provider-card {
   padding: 0.5rem 0.75rem;
   font-size: 0.85rem;
