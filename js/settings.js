@@ -218,6 +218,18 @@ export function loadSettingsLocally() {
   return null;
 }
 
+function showToast(message, duration) {
+  duration = duration || 2500;
+  const toast = document.getElementById("toast-notification");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add("visible");
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(() => {
+    toast.classList.remove("visible");
+  }, duration);
+}
+
 function saveSettingsLocally() {
   try {
     const toSave = JSON.stringify(settings);
@@ -650,8 +662,10 @@ function initSettingsModal() {
 
     if (isConnected) {
       setStatus("Settings saved. Connection successful.", "success");
+      showToast("Settings saved.");
     } else {
       setStatus("Settings saved, but connection test could not reach the endpoint. Check the URL and API key.", "warning");
+      showToast("Settings saved.");
     }
     if (window.updateProviderStatus) window.updateProviderStatus();
     if (prayerSignatureInput) {

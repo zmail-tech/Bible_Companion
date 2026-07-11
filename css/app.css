@@ -2622,3 +2622,27 @@ header#app-header {
     padding: 0.4rem;
   }
 }
+
+/* Toast notification */
+.toast-notification {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(1rem);
+  padding: 0.75rem 1.25rem;
+  font-size: 0.85rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  background: rgba(45, 107, 48, 0.95);
+  color: #fff;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  z-index: 10000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast-notification.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
