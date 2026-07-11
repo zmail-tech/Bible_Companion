@@ -1039,6 +1039,108 @@ header#app-header {
   margin: 1rem 0;
 }
 
+/* --- AI Input Area --- */
+
+#ai-input-area {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 2px solid var(--border-dark);
+  background: var(--ai-bg);
+  flex-shrink: 0;
+}
+
+#ai-input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  background: var(--bible-bg);
+  border-top: 2px solid var(--bevel-dark);
+  border-left: 2px solid var(--bevel-dark);
+  border-bottom: 2px solid var(--bevel-light);
+  border-right: 2px solid var(--bevel-light);
+  color: var(--text-primary);
+  padding: 0.4rem 0.5rem;
+  font-size: 0.875rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  line-height: 1.4;
+  max-height: 120px;
+  outline: none;
+}
+
+#ai-input:focus {
+  outline: 1px dotted var(--burgundy);
+}
+
+#ai-send-btn {
+  flex-shrink: 0;
+  background: var(--gold);
+  color: #fff;
+  border-top: 2px solid var(--gold-light);
+  border-left: 2px solid var(--gold-light);
+  border-bottom: 2px solid #8b6508;
+  border-right: 2px solid #8b6508;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#ai-send-btn:hover:not(:disabled) {
+  background: var(--gold-light);
+}
+
+#ai-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- AI Chat Messages --- */
+
+.ai-user-message {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--accent-light);
+  border-left: 3px solid var(--gold);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ai-assistant-message {
+  margin-bottom: 0.75rem;
+}
+
+.ai-assistant-message p {
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+  font-family: "Times New Roman", Times, Georgia, serif;
+}
+
+.ai-assistant-message h1,
+.ai-assistant-message h2,
+.ai-assistant-message h3 {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--burgundy);
+  font-family: "Times New Roman", Times, Georgia, serif;
+}
+
+.ai-assistant-message ul,
+.ai-assistant-message ol {
+  margin: 0.5rem 0 0.75rem 1.5rem;
+  color: var(--text-primary);
+}
+
+.ai-assistant-message li {
+  margin-bottom: 0.25rem;
+}
+
 .prayer-preview hr.markdown-hr {
   border: none;
   border-top: 1px solid var(--border-light);
@@ -1763,6 +1865,38 @@ header#app-header {
 
 [data-theme="modern"] #ai-response hr.markdown-hr {
   border-top-color: var(--border-dark);
+}
+
+/* --- Modern Theme AI Input --- */
+
+[data-theme="modern"] #ai-input-area {
+  border-top: 1px solid var(--border-dark);
+}
+
+[data-theme="modern"] #ai-input {
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+[data-theme="modern"] #ai-input:focus {
+  outline: 2px solid var(--burgundy);
+}
+
+[data-theme="modern"] #ai-send-btn {
+  border: 1px solid var(--gold-light);
+  border-radius: 6px;
+}
+
+[data-theme="modern"] .ai-user-message {
+  border-radius: 6px;
+  border-left: 3px solid var(--gold-light);
+}
+
+[data-theme="modern"] .ai-assistant-message h1,
+[data-theme="modern"] .ai-assistant-message h2,
+[data-theme="modern"] .ai-assistant-message h3 {
+  color: var(--gold-light);
 }
 
 [data-theme="modern"] .prayer-preview hr.markdown-hr {

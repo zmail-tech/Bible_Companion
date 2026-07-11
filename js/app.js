@@ -60,6 +60,7 @@ function createTab(book, chapter) {
     aiStatus: "",
     aiTitle: "AI Commentary",
     intent: "commentary",
+    chatHistory: [],
   };
   tabs.push(tab);
   switchToTab(id);
@@ -105,8 +106,22 @@ function restoreAIResponse(tab) {
   const responseEl = document.getElementById("ai-response");
   const statusEl = document.getElementById("ai-status");
   const titleEl = document.querySelector("#ai-header h2");
-  if (tab.aiResponse) {
-    responseEl.innerHTML = tab.aiResponse;
+  if (tab.chatHistory && tab.chatHistory.length > 0) {
+    responseEl.innerHTML = "";
+    for (const entry of tab.chatHistory) {
+      if (entry.role === "user") {
+        const userMsg = document.createElement("div");
+        userMsg.className = "ai-user-message";
+        userMsg.textContent = entry.content;
+        responseEl.appendChild(userMsg);
+      } else if (entry.role === "assistant") {
+        const asstMsg = document.createElement("div");
+        asstMsg.className = "ai-assistant-message";
+        asstMsg.innerHTML = renderMarkdown(entry.content);
+        responseEl.appendChild(asstMsg);
+      }
+    }
+    responseEl.scrollTop = responseEl.scrollHeight;
   } else {
     responseEl.innerHTML = '<p class="selection-hint">Select verses and send to Bible Companion for commentary.</p>';
   }
@@ -236,6 +251,7 @@ function loadTabsFromStorage() {
         aiStatus: "",
         aiTitle: "AI Commentary",
         intent: "commentary",
+        chatHistory: [],
       }));
       nextTabId = savedNextId || (Math.max(...tabs.map(t => t.id)) + 1);
       const restoreId = savedActiveId && tabs.find(t => t.id === savedActiveId) ? savedActiveId : tabs[0].id;
@@ -634,6 +650,7 @@ async function startApp() {
   bindNavigationEvents();
   bindKeyboardShortcuts();
   initAiIntentBox();
+  initAiInput();
 
   const success = await loadBibleData();
   if (success) {
@@ -1068,7 +1085,32 @@ function bindKeyboardShortcuts() {
   });
 }
 
-async function sendToAI(intentKey) {
+function handleFollowUp() {
+  const input = document.getElementById("ai-input");
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text || isLoading) return;
+  input.value = "";
+  sendToAI(null, text);
+}
+
+function initAiInput() {
+  const sendBtn = document.getElementById("ai-send-btn");
+  const input = document.getElementById("ai-input");
+  if (sendBtn) {
+    sendBtn.addEventListener("click", handleFollowUp);
+  }
+  if (input) {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleFollowUp();
+      }
+    });
+  }
+}
+
+async function sendToAI(intentKey, followUpText) {
   const tab = getActiveTab();
   if (isLoading || !tab) return;
 
@@ -1084,38 +1126,74 @@ async function sendToAI(intentKey) {
   const statusEl = document.getElementById("ai-status");
 
   isLoading = true;
-  const intent = intentKey || DEFAULT_INTENT;
-  const intentLabel = IntentLabels[intent] || IntentLabels[DEFAULT_INTENT];
-  const promptString = INTENT_PROMPTS[intent] || INTENT_PROMPTS[DEFAULT_INTENT];
-  const finalPrompt = `${promptString}\n\nHere is the text to analyze:\n"${selectedText}"`;
+  try {
+    const intent = intentKey || DEFAULT_INTENT;
+    const intentLabel = IntentLabels[intent] || IntentLabels[DEFAULT_INTENT];
+    const promptString = INTENT_PROMPTS[intent] || INTENT_PROMPTS[DEFAULT_INTENT];
+    const finalPrompt = `${promptString}\n\nHere is the text to analyze:\n"${selectedText}"`;
 
-  tab.intent = intent;
+    tab.intent = intent;
 
-  responseEl.innerHTML = `<span class="loading-spinner"></span> Loading ${intentLabel}...`;
-  statusEl.textContent = "Requesting...";
-  document.querySelector("#ai-header h2").textContent = `AI: ${intentLabel}`;
-  tab.aiTitle = `AI: ${intentLabel}`;
+    if (followUpText) {
+      tab.chatHistory.push({ role: "user", content: followUpText });
+      const userMsg = document.createElement("div");
+      userMsg.className = "ai-user-message";
+      userMsg.textContent = followUpText;
+      responseEl.appendChild(userMsg);
+      responseEl.scrollTop = responseEl.scrollHeight;
 
-  const requestBody = {
-    model: commentaryConfig.modelId,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: finalPrompt }
-    ],
-    max_tokens: 2048,
-    temperature: 0.7
-  };
+      const historyEntries = tab.chatHistory.slice(-20);
+      const messages = [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...historyEntries.map(e => ({ role: e.role, content: e.content }))
+      ];
 
-  console.log("[ai] AI request body", {
-    provider: provider.name,
-    model: commentaryConfig.modelId,
-    messageCount: requestBody.messages.length,
-    systemPromptLength: requestBody.messages[0].content.length,
-    userPromptLength: requestBody.messages[1].content.length,
-    max_tokens: requestBody.max_tokens,
-    stream: requestBody.stream
-  });
+      const requestBody = {
+        model: commentaryConfig.modelId,
+        messages,
+        max_tokens: 2048,
+        temperature: 0.7
+      };
 
+      console.log("[ai] AI follow-up request", {
+        provider: provider.name,
+        model: commentaryConfig.modelId,
+        messageCount: requestBody.messages.length
+      });
+
+      await streamAIResponse(provider, responseEl, statusEl, tab, requestBody);
+    } else {
+      tab.chatHistory = [];
+      document.querySelector("#ai-header h2").textContent = `AI: ${intentLabel}`;
+      tab.aiTitle = `AI: ${intentLabel}`;
+
+      responseEl.innerHTML = `<span class="loading-spinner"></span> Loading ${intentLabel}...`;
+      statusEl.textContent = "Requesting...";
+
+      const requestBody = {
+        model: commentaryConfig.modelId,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: finalPrompt }
+        ],
+        max_tokens: 2048,
+        temperature: 0.7
+      };
+
+      console.log("[ai] AI request body", {
+        provider: provider.name,
+        model: commentaryConfig.modelId,
+        messageCount: requestBody.messages.length
+      });
+
+      await streamAIResponse(provider, responseEl, statusEl, tab, requestBody);
+    }
+  } finally {
+    isLoading = false;
+  }
+}
+
+async function streamAIResponse(provider, responseEl, statusEl, tab, requestBody) {
   try {
     const headers = {
       "Content-Type": "application/json"
@@ -1124,8 +1202,8 @@ async function sendToAI(intentKey) {
       headers["Authorization"] = `Bearer ${provider.apiKey}`;
     }
 
-    const REQUEST_TIMEOUT = 120000; // 120 seconds
-    const STREAM_IDLE_TIMEOUT = 30000; // 30 seconds with no stream data
+    const REQUEST_TIMEOUT = 120000;
+    const STREAM_IDLE_TIMEOUT = 30000;
     const abortController = new AbortController();
     let activeAbortReason = "";
     const timeoutId = setTimeout(() => {
@@ -1134,7 +1212,6 @@ async function sendToAI(intentKey) {
     }, REQUEST_TIMEOUT);
 
     headers["Cache-Control"] = "no-cache";
-    console.log("[ai] request started", { model: commentaryConfig.modelId, promptLength: finalPrompt.length });
 
     const response = await fetch(provider.endpoint, {
       method: "POST",
@@ -1161,32 +1238,27 @@ async function sendToAI(intentKey) {
         errMsg += `: ${errText.substring(0, 200)}`;
       }
 
-      responseEl.innerHTML = `<p style="color: var(--error);">${escapeHtml(errMsg)}</p>`;
+      const errP = document.createElement("p");
+      errP.style.color = "var(--error)";
+      errP.textContent = errMsg;
+      responseEl.appendChild(errP);
       statusEl.textContent = "Error";
-      tab.aiResponse = responseEl.innerHTML;
       tab.aiStatus = "Error";
       return;
     }
-
-    const contentType = response.headers.get("content-type") || "";
-    // llama.cpp uses application/x-ndjson; OpenAI/SSE uses text/event-stream; some servers use text/plain
-    // Since we always request stream:true, treat successful responses with body as streamable
-    const isStreamContentType = contentType.includes("text/event-stream")
-      || contentType.includes("text/plain")
-      || contentType.includes("application/x-ndjson");
-    const isSSE = contentType.includes("text/event-stream");
-    const isNDJSON = contentType.includes("application/x-ndjson");
-    console.log("[ai] response content-type:", contentType, { isSSE, isNDJSON });
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
     let buffer = "";
 
-    responseEl.innerHTML = "";
+    const streamingEl = document.createElement("div");
+    streamingEl.className = "ai-assistant-message streaming-response";
+    streamingEl.innerHTML = `<span class="loading-spinner"></span>`;
+    responseEl.appendChild(streamingEl);
+
     statusEl.textContent = "Streaming...";
     tab.aiStatus = "Streaming...";
-    console.log("[ai] stream started", { contentType });
 
     let streamIdleTimer = null;
     let streamedChunks = 0;
@@ -1215,16 +1287,13 @@ async function sendToAI(intentKey) {
           if (!trimmed) continue;
 
           let dataStr = trimmed;
-          // SSE format: "data: {json}" — strip the "data: " prefix
           if (trimmed.startsWith("data: ")) {
             dataStr = trimmed.slice(6);
           }
-          // SSE completion signal
           if (dataStr === "[DONE]") break;
 
           try {
             const json = JSON.parse(dataStr);
-            // Handle delta-based streaming (OpenAI/standard) and full-content (llama.cpp/stream)
             const delta =
               json.choices?.[0]?.delta?.content ||
               json.choices?.[0]?.delta?.text ||
@@ -1237,13 +1306,10 @@ async function sendToAI(intentKey) {
               streamedChunks += 1;
               fullText += delta;
               if (streamedChunks % 50 === 0) {
-                responseEl.innerHTML = renderMarkdown(fullText);
+                streamingEl.innerHTML = renderMarkdown(stripThinkingTags(fullText));
                 responseEl.scrollTop = responseEl.scrollHeight;
               }
-              if (streamedChunks % 100 === 0) console.log("[ai] streamed", streamedChunks, "chunks");
             }
-            // Skip reasoning_content to avoid leaking thinking data
-            // (it would appear as noise in the visible response)
           } catch {
             // Skip unparseable chunks
           }
@@ -1254,7 +1320,7 @@ async function sendToAI(intentKey) {
 
       if (fullText) {
         const cleanText = stripThinkingTags(fullText);
-        responseEl.innerHTML = renderMarkdown(cleanText);
+        streamingEl.innerHTML = renderMarkdown(cleanText);
         responseEl.scrollTop = responseEl.scrollHeight;
       }
 
@@ -1265,65 +1331,56 @@ async function sendToAI(intentKey) {
       if (streamErr.name === "AbortError") {
         if (fullText) {
           const cleanText = stripThinkingTags(fullText);
-          responseEl.innerHTML = renderMarkdown(cleanText);
-          tab.aiResponse = responseEl.innerHTML;
+          streamingEl.innerHTML = renderMarkdown(cleanText);
           tab.aiStatus = activeAbortReason === "Stream stalled for 30s"
             ? "Streaming interrupted: no stream data for 30s. Partial result shown."
             : "Streaming interrupted: request timed out after 120s. Partial result shown.";
           statusEl.textContent = tab.aiStatus;
         } else {
-          responseEl.innerHTML = '<p style="color: var(--error);">' + escapeHtml(activeAbortReason === "Stream stalled for 30s"
+          streamingEl.innerHTML = '<p style="color: var(--error);">' + escapeHtml(activeAbortReason === "Stream stalled for 30s"
             ? "No response data for 30s. Try again."
             : "Request timed out after 120s. Try again.") + '</p>';
-          tab.aiResponse = responseEl.innerHTML;
           tab.aiStatus = "Error";
           statusEl.textContent = "Error";
         }
       } else {
         throw streamErr;
       }
-      }
+    }
 
-      if (abortController.signal.aborted) {
-        return;
-      }
+    if (abortController.signal.aborted) {
+      return;
+    }
 
-      if (!fullText) {
-        console.warn("[ai] empty response after streaming", {
-          streamedChunks,
-          model: commentaryConfig.modelId,
-          endpoint: provider.endpoint,
-          contentType
-        });
-        responseEl.innerHTML = '<p class="selection-hint">Received empty response from API.</p>';
-      }
+    if (!fullText) {
+      responseEl.innerHTML = '<p class="selection-hint">Received empty response from API.</p>';
+    }
 
-      if (fullText) {
-        tab.aiResponse = responseEl.innerHTML;
-        tab.aiStatus = "Response ready";
-        statusEl.textContent = "Response ready";
+    if (fullText) {
+      tab.chatHistory.push({ role: "assistant", content: stripThinkingTags(fullText) });
+      if (tab.chatHistory.length > 20) {
+        tab.chatHistory = tab.chatHistory.slice(-20);
       }
-
+      tab.aiResponse = responseEl.innerHTML;
+      tab.aiStatus = "Response ready";
+      statusEl.textContent = "Response ready";
+    }
   } catch (err) {
     const msg = err.message || "Unknown error";
     let displayMsg = `Request failed: ${msg}`;
 
     if (err.name === "AbortError") {
-      if (activeAbortReason === "Stream stalled for 30s") {
-        displayMsg = "Stream stalled for 30s. Try again.";
-      } else {
-        displayMsg = "Request timed out after 120s. Try again.";
-      }
+      displayMsg = "Request interrupted. Try again.";
     } else if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
       displayMsg = `Network error. This is likely a CORS restriction. Try running through a local proxy, or use an endpoint that allows cross-origin requests.`;
     }
 
-    responseEl.innerHTML = `<p style="color: var(--error);">${escapeHtml(displayMsg)}</p>`;
+    const errP = document.createElement("p");
+    errP.style.color = "var(--error)";
+    errP.textContent = displayMsg;
+    responseEl.appendChild(errP);
     statusEl.textContent = "Error";
-    tab.aiResponse = responseEl.innerHTML;
     tab.aiStatus = "Error";
-  } finally {
-    isLoading = false;
   }
 }
 
