@@ -539,14 +539,72 @@ function bootstrap() {
   startApp();
 }
 
-function initIntentSelector() {
-  const select = document.getElementById("intent-select");
-  const saved = localStorage.getItem("bibleCompanion_intent");
-  if (saved && INTENT_PROMPTS[saved]) {
-    select.value = saved;
+const IntentIcons = {
+  commentary: "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z'/><path d='M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z'/></svg>",
+  reference: "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10 12.5 9 15h3l-1-3Z'/><path d='m14 12.5 1 2.5h-3l1-3'/><path d='M9 9h6l-1.5-4H10Z'/><path d='M12 5v14'/></svg>",
+  context: "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2'/><path d='M7 7h.01'/><path d='M17 7h.01'/><path d='M7 17h.01'/><path d='M17 17h.01'/><path d='M12 8v8'/></svg>",
+  wordstudy: "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M4 7c0-1.2 1-2 2-2h12a2 2 0 0 1 2 2v5c0 1.2-1 2-2 2H6a2 2 0 0 1-2-2Z'/><path d='M12 12v7'/><path d='M8 16h8'/></svg>",
+  application: "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2v4'/><path d='m16.2 7.8 2.9-2.9'/><path d='M18 12h4'/><path d='m16.2 16.2 2.9 2.9'/><path d='M12 18v4'/><path d='m4.9 19.1 2.9-2.9'/><path d='M2 12h4'/><path d='m4.9 4.9 2.9 2.9'/></svg>",
+  questions: "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/><path d='M12 17h.01'/></svg>",
+  summary: "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2'/><path d='M8 2h8'/><path d='M8 10h8'/><path d='M8 14h8'/></svg>",
+};
+
+const IntentLabels = {
+  commentary: "Commentary",
+  reference: "Reference Verses",
+  context: "Context & Background",
+  wordstudy: "Word Study",
+  application: "Modern Application",
+  questions: "Study Questions",
+  summary: "Summary",
+};
+
+function initAiIntentBox() {
+  const grid = document.getElementById("ai-intent-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  for (const [key, label] of Object.entries(IntentLabels)) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ai-intent-btn";
+    btn.dataset.intent = key;
+    btn.innerHTML = `${IntentIcons[key] || ""}<span>${label}</span>`;
+    btn.addEventListener("click", () => {
+      sendToAIWithIntent(key);
+    });
+    grid.appendChild(btn);
   }
-  select.addEventListener("change", () => {
-    localStorage.setItem("bibleCompanion_intent", select.value);
+}
+
+function setIntentButtonsLoading(loading) {
+  const buttons = document.querySelectorAll(".ai-intent-btn");
+  buttons.forEach((btn) => {
+    btn.disabled = loading;
+    if (loading) {
+      btn.classList.add("loading");
+    } else {
+      btn.classList.remove("loading");
+    }
+  });
+}
+
+function setIntentButtonLoading(btn, loading) {
+  if (!btn) return;
+  btn.disabled = loading;
+  if (loading) {
+    btn.classList.add("loading");
+  } else {
+    btn.classList.remove("loading");
+  }
+}
+
+function sendToAIWithIntent(intentKey) {
+  const tab = getActiveTab();
+  if (!tab) return;
+  const btn = document.querySelector(`.ai-intent-btn[data-intent="${intentKey}"]`);
+  setIntentButtonLoading(btn, true);
+  sendToAI(intentKey).finally(() => {
+    setIntentButtonsLoading(false);
   });
 }
 
@@ -557,9 +615,8 @@ async function startApp() {
   initModelSwitcher();
   populateBookSelect();
   bindNavigationEvents();
-  bindSendButton();
   bindKeyboardShortcuts();
-  initIntentSelector();
+  initAiIntentBox();
 
   const success = await loadBibleData();
   if (success) {
@@ -931,25 +988,34 @@ function getSelectedText() {
   return `${formatReference(tab.book, tab.chapter, "")}\n\n${parts.join("\n")}`;
 }
 
-function updateSendButtonState() {
-  const btn = document.getElementById("send-to-ai");
+function getChapterText() {
   const tab = getActiveTab();
-  btn.disabled = !tab || tab.selectedVerses.size === 0;
+  if (!tab) return "";
+  const verses = getChapter(tab.book, tab.chapter);
+  if (!verses || !verses.length) return "";
+
+  const parts = [];
+  for (const v of verses) {
+    if (v.text) {
+      parts.push(`Verse ${v.number}: ${v.text}`);
+    }
+  }
+  return `${formatReference(tab.book, tab.chapter, "")}\n\n${parts.join("\n")}`;
+}
+
+function updateSendButtonState() {
+  // No-op: send-to-ai button removed, replaced with intent grid
 }
 
 // --- LLM Integration ---
-
-function bindSendButton() {
-  document.getElementById("send-to-ai").addEventListener("click", sendToAI);
-}
 
 function bindKeyboardShortcuts() {
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       const tab = getActiveTab();
-      if (tab && tab.selectedVerses.size > 0) {
-        sendToAI();
+      if (tab) {
+        sendToAIWithIntent(DEFAULT_INTENT);
       }
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "t") {
@@ -985,9 +1051,9 @@ function bindKeyboardShortcuts() {
   });
 }
 
-async function sendToAI() {
+async function sendToAI(intentKey) {
   const tab = getActiveTab();
-  if (isLoading || !tab || tab.selectedVerses.size === 0) return;
+  if (isLoading || !tab) return;
 
   const commentaryConfig = getCommentaryModel();
   if (!commentaryConfig) {
@@ -996,14 +1062,13 @@ async function sendToAI() {
     return;
   }
   const provider = commentaryConfig.provider;
-  const selectedText = getSelectedText();
+  const selectedText = tab.selectedVerses.size > 0 ? getSelectedText() : getChapterText();
   const responseEl = document.getElementById("ai-response");
   const statusEl = document.getElementById("ai-status");
 
   isLoading = true;
-  const intentSelect = document.getElementById("intent-select");
-  const intent = intentSelect.value || DEFAULT_INTENT;
-  const intentLabel = intentSelect.options[intentSelect.selectedIndex].text;
+  const intent = intentKey || DEFAULT_INTENT;
+  const intentLabel = IntentLabels[intent] || IntentLabels[DEFAULT_INTENT];
   const promptString = INTENT_PROMPTS[intent] || INTENT_PROMPTS[DEFAULT_INTENT];
   const finalPrompt = `${promptString}\n\nHere is the text to analyze:\n"${selectedText}"`;
 
@@ -1465,6 +1530,7 @@ function switchMode(mode) {
   const splitter = document.getElementById("splitter");
   const navigationBar = document.getElementById("navigation-bar");
   const aiPanel = document.getElementById("ai-panel");
+  const aiIntentBox = document.getElementById("ai-intent-box");
   const prayerEditor = document.getElementById("prayer-editor");
   const bibleTab = document.getElementById("mode-bible-tab");
   const prayerTab = document.getElementById("mode-prayer-tab");
@@ -1479,6 +1545,7 @@ function switchMode(mode) {
     splitter.classList.add("hidden");
     navigationBar.classList.add("hidden");
     aiPanel.classList.add("hidden");
+    if (aiIntentBox) aiIntentBox.classList.add("hidden");
     prayerEditor.classList.remove("hidden");
     tabBar.classList.remove("hidden");
     renderTabBar();
@@ -1488,6 +1555,7 @@ function switchMode(mode) {
     splitter.classList.remove("hidden");
     navigationBar.classList.remove("hidden");
     aiPanel.classList.remove("hidden");
+    if (aiIntentBox) aiIntentBox.classList.remove("hidden");
     prayerEditor.classList.add("hidden");
     tabBar.classList.remove("hidden");
     renderTabBar();

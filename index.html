@@ -72,29 +72,12 @@
                 </button>
               </div>
             </div>
-            <div class="nav-actions">
-              <div class="nav-group">
-                <label for="intent-select">AI Intent</label>
-                <select id="intent-select">
-                  <option value="commentary" selected>Commentary</option>
-                  <option value="reference">Reference Verses</option>
-                  <option value="context">Context &amp; Background</option>
-                  <option value="wordstudy">Word Study</option>
-                  <option value="application">Modern Application</option>
-                  <option value="questions">Study Questions</option>
-                  <option value="summary">Summary</option>
-                </select>
-              </div>
-              <button id="send-to-ai" class="btn-primary" disabled title="Send selected verses to AI (Ctrl+Enter)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="m21 15-3-3v-4a1 1 0 0 0-1-1h-7.086a1 1 0 0 0-.707.293L4.675 10.293A1 1 0 0 0 4 11v7a1 1 0 0 0 1 1h5"></path>
-                  <circle cx="12" cy="7" r="1"></circle>
-                </svg>
-                Send to Bible Companion
-              </button>
-            </div>
           </nav>
           <div id="verse-container"></div>
+          <div id="ai-intent-box">
+            <div class="ai-intent-header">AI Commentary</div>
+            <div class="ai-intent-grid" id="ai-intent-grid"></div>
+          </div>
         </section>
 
         <div id="splitter"></div>

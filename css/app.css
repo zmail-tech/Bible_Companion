@@ -2227,6 +2227,128 @@ header#app-header {
   font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* --- AI Intent Box --- */
+
+#ai-intent-box {
+  flex-shrink: 0;
+  background: var(--parchment);
+  border-top: 2px solid var(--bevel-light);
+  border-left: 2px solid var(--bevel-light);
+  border-bottom: 2px solid var(--bevel-dark);
+  border-right: 2px solid var(--bevel-dark);
+  margin: 0 3px 3px;
+  padding: 0.5rem 0.6rem 0.6rem;
+}
+
+.ai-intent-header {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  margin-bottom: 0.4rem;
+  user-select: none;
+}
+
+.ai-intent-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+}
+
+.ai-intent-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  background: var(--parchment-dark);
+  color: var(--text-primary);
+  border-top: 2px solid var(--bevel-light);
+  border-left: 2px solid var(--bevel-light);
+  border-bottom: 2px solid var(--bevel-dark);
+  border-right: 2px solid var(--bevel-dark);
+  padding: 0.4rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-intent-btn svg {
+  flex-shrink: 0;
+}
+
+.ai-intent-btn:hover:not(:disabled) {
+  background: var(--gold-light);
+  color: var(--navy);
+}
+
+.ai-intent-btn:active:not(:disabled) {
+  border-top: 2px solid var(--bevel-dark);
+  border-left: 2px solid var(--bevel-dark);
+  border-bottom: 2px solid var(--bevel-light);
+  border-right: 2px solid var(--bevel-light);
+}
+
+.ai-intent-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-intent-btn.loading {
+  pointer-events: none;
+}
+
+.ai-intent-btn.loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.ai-intent-btn.loading::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--text-muted);
+  border-top-color: var(--burgundy);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  z-index: 1;
+}
+
+/* --- Modern Theme: AI Intent Box --- */
+
+[data-theme="modern"] #ai-intent-box {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+}
+
+[data-theme="modern"] .ai-intent-header {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+[data-theme="modern"] .ai-intent-btn {
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+[data-theme="modern"] .ai-intent-btn:active:not(:disabled) {
+  border: 1px solid var(--border-dark);
+}
+
+[data-theme="modern"] .ai-intent-btn.loading::after {
+  background: rgba(0, 0, 0, 0.3);
+}
+
 /* --- Responsive --- */
 
 @media (max-width: 768px) {
@@ -2279,6 +2401,15 @@ header#app-header {
 
   .book-column {
     width: 130px;
+  }
+
+  .ai-intent-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .ai-intent-btn {
+    font-size: 0.7rem;
+    padding: 0.35rem 0.4rem;
   }
 
   #verse-container {
@@ -2416,5 +2547,17 @@ header#app-header {
   .btn-primary {
     font-size: 0.75rem;
     padding: 0.375rem 0.5rem;
+  }
+
+  .ai-intent-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ai-intent-btn span {
+    display: none;
+  }
+
+  .ai-intent-btn {
+    padding: 0.4rem;
   }
 }
