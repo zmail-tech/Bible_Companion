@@ -415,7 +415,10 @@ function selectBook(book) {
   const chapterSelect = document.getElementById("chapter-select");
   if (chapterSelect) chapterSelect.value = 1;
   renderChapter();
-  if (tab) saveTabsToStorage();
+  if (tab) {
+    saveTabsToStorage();
+    renderTabBar();
+  }
 
   const trigger = document.getElementById("book-select");
   const panel = document.querySelector(".book-dropdown-panel");
@@ -451,6 +454,7 @@ function bindNavigationEvents() {
     setCurrentChapter(tab.chapter);
     renderChapter();
     saveTabsToStorage();
+    renderTabBar();
   });
 
   prevBtn.addEventListener("click", () => {
@@ -466,6 +470,7 @@ function bindNavigationEvents() {
     chapterSelect.value = tab.chapter;
     renderChapter();
     saveTabsToStorage();
+    renderTabBar();
   });
 
   nextBtn.addEventListener("click", () => {
@@ -481,6 +486,7 @@ function bindNavigationEvents() {
     chapterSelect.value = tab.chapter;
     renderChapter();
     saveTabsToStorage();
+    renderTabBar();
   });
 }
 
