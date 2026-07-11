@@ -518,6 +518,7 @@ header#app-header {
 #navigation-bar {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.75rem;
   padding: 0.5rem 1rem;
   background: var(--parchment);
@@ -536,6 +537,7 @@ header#app-header {
   margin: 3px;
   margin-bottom: 0;
   padding: 0.5rem 0.75rem;
+  justify-content: center;
 }
 
 .nav-group {
