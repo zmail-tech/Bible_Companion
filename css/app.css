@@ -1073,6 +1073,46 @@ header#app-header {
   border-right: 2px solid var(--bevel-light);
 }
 
+/* --- Recipients List --- */
+
+.recipients-list {
+  margin-top: 0.75rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.recipient-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.625rem;
+  margin-bottom: 0.375rem;
+  border: 1px solid var(--bevel-dark);
+  background: var(--bible-bg);
+  border-radius: 4px;
+}
+
+.recipient-email {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.recipient-remove {
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+  padding: 0.2rem;
+}
+
+.recipients-input-row {
+  display: flex;
+  align-items: center;
+}
+
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -1493,6 +1533,19 @@ header#app-header {
 
 [data-theme="modern"] .icon-btn:active {
   border: 1px solid var(--border-dark);
+}
+
+[data-theme="modern"] .recipients-list {
+  max-height: 200px;
+}
+
+[data-theme="modern"] .recipient-item {
+  border: 1px solid var(--border-dark);
+  border-radius: 6px;
+}
+
+[data-theme="modern"] .recipient-email {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 [data-theme="modern"] .icon-btn-models {

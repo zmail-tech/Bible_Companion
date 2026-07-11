@@ -286,8 +286,13 @@
         <div class="form-group">
           <label for="recipients-textarea">Email Addresses</label>
           <textarea id="recipients-textarea" rows="4" style="width: 100%; resize: vertical; background: var(--bible-bg); border-top: 2px solid var(--bevel-dark); border-left: 2px solid var(--bevel-dark); border-bottom: 2px solid var(--bevel-light); border-right: 2px solid var(--bevel-light); color: var(--text-primary); padding: 0.5rem 0.625rem; font-size: 0.875rem; font-family: &quot;Times New Roman&quot;, Times, Georgia, serif;" placeholder="Enter comma-separated email addresses"></textarea>
-          <small class="form-hint">One or more email addresses, separated by commas.</small>
+          <small class="form-hint">Enter comma-separated emails, or add one at a time below.</small>
         </div>
+        <div class="recipients-input-row" style="margin-bottom: 0.75rem;">
+          <input type="email" id="recipients-single-input" placeholder="Add one email" style="flex: 1; min-width: 0; padding: 0.5rem 0.625rem; font-size: 0.875rem; background: var(--bible-bg); color: var(--text-primary); border-top: 2px solid var(--bevel-dark); border-left: 2px solid var(--bevel-dark); border-bottom: 2px solid var(--bevel-light); border-right: 2px solid var(--bevel-light); font-family: &quot;Times New Roman&quot;, Times, Georgia, serif;" />
+          <button type="button" id="recipients-add-btn" class="btn-primary" style="margin-left: 0.5rem; white-space: nowrap;">Add</button>
+        </div>
+        <div id="recipients-list" class="recipients-list"></div>
         <div class="form-actions">
           <button type="button" id="recipients-cancel-btn" class="btn-secondary">Cancel</button>
           <button type="button" id="recipients-save-btn" class="btn-primary">Save</button>

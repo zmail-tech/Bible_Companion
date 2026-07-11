@@ -2096,12 +2096,61 @@ function updateRecipientsButton() {
   }
 }
 
+function renderRecipientsList() {
+  const textarea = document.getElementById("recipients-textarea");
+  const listEl = document.getElementById("recipients-list");
+  if (!textarea || !listEl) return;
+  const emails = textarea.value.split(",").map(e => e.trim()).filter(e => e);
+  listEl.innerHTML = "";
+  emails.forEach((email, index) => {
+    const item = document.createElement("div");
+    item.className = "recipient-item";
+    const text = document.createElement("span");
+    text.className = "recipient-email";
+    text.textContent = email;
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "icon-btn recipient-remove";
+    removeBtn.setAttribute("aria-label", "Remove " + email);
+    removeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    removeBtn.addEventListener("click", () => removeEmail(index));
+    item.appendChild(text);
+    item.appendChild(removeBtn);
+    listEl.appendChild(item);
+  });
+}
+
+function addSingleEmail() {
+  const input = document.getElementById("recipients-single-input");
+  const textarea = document.getElementById("recipients-textarea");
+  if (!input || !textarea) return;
+  const email = input.value.trim();
+  if (!email) return;
+  if (textarea.value.trim()) {
+    textarea.value = textarea.value + ", " + email;
+  } else {
+    textarea.value = email;
+  }
+  renderRecipientsList();
+  input.value = "";
+  input.focus();
+}
+
+function removeEmail(index) {
+  const textarea = document.getElementById("recipients-textarea");
+  if (!textarea) return;
+  const emails = textarea.value.split(",").map(e => e.trim()).filter(e => e);
+  emails.splice(index, 1);
+  textarea.value = emails.join(", ");
+  renderRecipientsList();
+}
+
 function openRecipientsModal() {
   const modal = document.getElementById("recipients-modal");
   const textarea = document.getElementById("recipients-textarea");
   const tab = getActivePrayerTab();
   if (modal) {
     if (tab) textarea.value = tab.recipients || "";
+    renderRecipientsList();
     modal.classList.add("active");
   }
 }
@@ -2132,12 +2181,14 @@ function initRecipients() {
   const closeBtn = document.getElementById("close-recipients");
   const saveBtn = document.getElementById("recipients-save-btn");
   const cancelBtn = document.getElementById("recipients-cancel-btn");
+  const addBtn = document.getElementById("recipients-add-btn");
   const modal = document.getElementById("recipients-modal");
 
   if (openBtn) openBtn.addEventListener("click", openRecipientsModal);
   if (closeBtn) closeBtn.addEventListener("click", closeRecipientsModal);
   if (saveBtn) saveBtn.addEventListener("click", saveRecipients);
   if (cancelBtn) cancelBtn.addEventListener("click", closeRecipientsModal);
+  if (addBtn) addBtn.addEventListener("click", addSingleEmail);
   if (modal) {
     modal.querySelector(".modal-overlay").addEventListener("click", closeRecipientsModal);
   }
