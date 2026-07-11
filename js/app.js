@@ -1264,12 +1264,15 @@ function switchMode(mode) {
   bibleTab.classList.toggle("active", mode === "bible");
   prayerTab.classList.toggle("active", mode === "prayer");
 
+  const tabBar = document.getElementById("tab-bar");
+
   if (isPrayerMode) {
     bibleReader.classList.add("hidden");
     splitter.classList.add("hidden");
     navigationBar.classList.add("hidden");
     aiPanel.classList.add("hidden");
     prayerEditor.classList.remove("hidden");
+    tabBar.classList.add("hidden");
     restorePrayerText();
   } else {
     bibleReader.classList.remove("hidden");
@@ -1277,6 +1280,7 @@ function switchMode(mode) {
     navigationBar.classList.remove("hidden");
     aiPanel.classList.remove("hidden");
     prayerEditor.classList.add("hidden");
+    tabBar.classList.remove("hidden");
   }
 }
 
