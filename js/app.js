@@ -29,7 +29,8 @@ const INTENT_PROMPTS = {
   wordstudy: "Perform a linguistic analysis of the passage. Identify key Hebrew or Greek words, their original meanings, and how they inform the translation.",
   application: "Explain the practical application of this passage. How does this teaching apply to a modern believer's life, relationships, or work?",
   questions: "Generate 5 thoughtful discussion questions based on this passage suitable for a Bible study or small group.",
-  summary: "Provide a concise, one-paragraph summary of the main points and themes of this passage."
+  summary: "Provide a concise, one-paragraph summary of the main points and themes of this passage.",
+  crosscommentary: "Compare how different theologians and scholarly traditions interpret this passage. Include perspectives from John Calvin, Augustine, Martin Luther, and at least one modern evangelical scholar. Highlight where they agree, where they diverge, and why."
 };
 
 const DEFAULT_INTENT = "commentary";
@@ -547,6 +548,7 @@ const IntentIcons = {
   application: "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2v4'/><path d='m16.2 7.8 2.9-2.9'/><path d='M18 12h4'/><path d='m16.2 16.2 2.9 2.9'/><path d='M12 18v4'/><path d='m4.9 19.1 2.9-2.9'/><path d='M2 12h4'/><path d='m4.9 4.9 2.9 2.9'/></svg>",
   questions: "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/><path d='M12 17h.01'/></svg>",
   summary: "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2'/><path d='M8 2h8'/><path d='M8 10h8'/><path d='M8 14h8'/></svg>",
+  crosscommentary: "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M23 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>",
 };
 
 const IntentLabels = {
@@ -557,6 +559,18 @@ const IntentLabels = {
   application: "Modern Application",
   questions: "Study Questions",
   summary: "Summary",
+  crosscommentary: "Cross-Commentary",
+};
+
+const IntentDescriptions = {
+  commentary: "Detailed theological commentary with Southern Baptist perspectives",
+  reference: "Key cross-reference verses that support or allude to this passage",
+  context: "Historical setting, author, audience, and cultural background",
+  wordstudy: "Hebrew/Greek word analysis with original meanings",
+  application: "Practical takeaways for modern believers",
+  questions: "Discussion questions for Bible study or small groups",
+  summary: "Concise one-paragraph summary of main themes",
+  crosscommentary: "Compare interpretations from Calvin, Augustine, Luther, and modern scholars",
 };
 
 function initAiIntentBox() {
@@ -569,6 +583,7 @@ function initAiIntentBox() {
     btn.className = "ai-intent-btn";
     btn.dataset.intent = key;
     btn.innerHTML = `${IntentIcons[key] || ""}<span>${label}</span>`;
+    btn.title = IntentDescriptions[key] || "";
     btn.addEventListener("click", () => {
       sendToAIWithIntent(key);
     });
