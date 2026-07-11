@@ -318,6 +318,18 @@ header#app-header {
   text-overflow: ellipsis;
 }
 
+.tab-rename-input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0 4px;
+  width: 100px;
+  outline: none;
+}
+
 .tab-close {
   display: none;
   background: none;
@@ -2351,6 +2363,41 @@ header#app-header {
     padding: 0.75rem 1rem;
   }
   }
+
+.bible-source-note {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted, #888);
+  margin-top: 1.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color, #e0e0e0);
+}
+
+.bsb-acknowledgement {
+  margin-top: 1.25rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  background: var(--bg-secondary, #f5f5f5);
+  border: 1px solid var(--border-color, #e0e0e0);
+}
+
+.bsb-acknowledgement h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.bsb-acknowledgement p {
+  margin: 0.25rem 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-muted, #555);
+}
+
+.bsb-acknowledgement a {
+  color: var(--accent-color, #2563eb);
+  text-decoration: underline;
+}
 
 @media (max-width: 480px) {
   .provider-status {

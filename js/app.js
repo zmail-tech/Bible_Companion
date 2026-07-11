@@ -42,6 +42,10 @@ let nextTabId = 1;
 let isLoading = false;
 let isPrayerMode = false;
 
+let prayerTabs = [];
+let activePrayerTabId = null;
+let nextPrayerTabId = 1;
+
 /* --- Tabs --- */
 
 function createTab(book, chapter) {
@@ -113,43 +117,96 @@ function renderTabBar() {
   const tabBar = document.getElementById("tab-bar");
   if (!tabBar) return;
   tabBar.innerHTML = "";
-  for (const tab of tabs) {
-    const tabItem = document.createElement("div");
-    tabItem.className = `tab-item${tab.id === activeTabId ? " active" : ""}`;
-    tabItem.dataset.tabId = tab.id;
-    tabItem.addEventListener("click", (e) => {
-      if (e.target.classList.contains("tab-close")) return;
-      switchToTab(tab.id);
+
+  if (isPrayerMode) {
+    for (const tab of prayerTabs) {
+      const tabItem = document.createElement("div");
+      tabItem.className = `tab-item${tab.id === activePrayerTabId ? " active" : ""}`;
+      tabItem.dataset.tabId = tab.id;
+      let clickTimer = null;
+      tabItem.addEventListener("click", (e) => {
+        if (e.target.classList.contains("tab-close")) return;
+        if (clickTimer) {
+          clearTimeout(clickTimer);
+          clickTimer = null;
+          startInlineTabRename(tabItem, tab.id, tab.name);
+        } else {
+          clickTimer = setTimeout(() => {
+            clickTimer = null;
+            switchToPrayerTab(tab.id);
+          }, 250);
+        }
+      });
+
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "tab-title";
+      titleSpan.textContent = tab.name;
+      titleSpan.title = tab.name;
+      tabItem.appendChild(titleSpan);
+
+      const closeBtn = document.createElement("button");
+      closeBtn.className = "tab-close";
+      closeBtn.setAttribute("aria-label", "Close tab");
+      closeBtn.textContent = "\u00d7";
+      closeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (confirm(`Delete tab "${tab.name}"?`)) {
+          closePrayerTab(tab.id);
+        }
+      });
+      tabItem.appendChild(closeBtn);
+
+      tabBar.appendChild(tabItem);
+    }
+
+    const addBtn = document.createElement("button");
+    addBtn.id = "add-tab-btn";
+    addBtn.className = "icon-btn";
+    addBtn.setAttribute("aria-label", "New prayer tab");
+    addBtn.textContent = "+";
+    addBtn.addEventListener("click", () => {
+      createPrayerTab("New List");
     });
+    tabBar.appendChild(addBtn);
+  } else {
+    for (const tab of tabs) {
+      const tabItem = document.createElement("div");
+      tabItem.className = `tab-item${tab.id === activeTabId ? " active" : ""}`;
+      tabItem.dataset.tabId = tab.id;
+      tabItem.addEventListener("click", (e) => {
+        if (e.target.classList.contains("tab-close")) return;
+        switchToTab(tab.id);
+      });
 
-    const titleSpan = document.createElement("span");
-    titleSpan.className = "tab-title";
-    titleSpan.textContent = `${tab.book} ${tab.chapter}`;
-    tabItem.appendChild(titleSpan);
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "tab-title";
+      titleSpan.textContent = `${tab.book} ${tab.chapter}`;
+      tabItem.appendChild(titleSpan);
 
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "tab-close";
-    closeBtn.setAttribute("aria-label", "Close tab");
-    closeBtn.textContent = "\u00d7";
-    closeBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      closeTab(tab.id);
+      const closeBtn = document.createElement("button");
+      closeBtn.className = "tab-close";
+      closeBtn.setAttribute("aria-label", "Close tab");
+      closeBtn.textContent = "\u00d7";
+      closeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeTab(tab.id);
+      });
+      tabItem.appendChild(closeBtn);
+
+      tabBar.appendChild(tabItem);
+    }
+
+    const addBtn = document.createElement("button");
+    addBtn.id = "add-tab-btn";
+    addBtn.className = "icon-btn";
+    addBtn.setAttribute("aria-label", "New tab");
+    addBtn.textContent = "+";
+    addBtn.addEventListener("click", () => {
+      const active = getActiveTab();
+      createTab(active ? active.book : "Genesis", active ? active.chapter : 1);
     });
-    tabItem.appendChild(closeBtn);
-
-    tabBar.appendChild(tabItem);
+    tabBar.appendChild(addBtn);
   }
-
-  const addBtn = document.createElement("button");
-  addBtn.id = "add-tab-btn";
-  addBtn.className = "icon-btn";
-  addBtn.setAttribute("aria-label", "New tab");
-  addBtn.textContent = "+";
-  addBtn.addEventListener("click", () => {
-    const active = getActiveTab();
-    createTab(active ? active.book : "Genesis", active ? active.chapter : 1);
-  });
-  tabBar.appendChild(addBtn);
 }
 
 function saveTabsToStorage() {
@@ -191,6 +248,138 @@ function loadTabsFromStorage() {
 }
 
 /* --- End Tabs --- */
+
+/* --- Prayer Tabs --- */
+
+function createPrayerTab(name, content) {
+  const id = nextPrayerTabId++;
+  const tab = {
+    id,
+    name: name || "New List",
+    content: content || "",
+  };
+  prayerTabs.push(tab);
+  switchToPrayerTab(id);
+  savePrayerTabsToStorage();
+  return tab;
+}
+
+function closePrayerTab(tabId) {
+  if (prayerTabs.length <= 1) return;
+  const idx = prayerTabs.findIndex(t => t.id === tabId);
+  if (idx === -1) return;
+  prayerTabs.splice(idx, 1);
+  if (activePrayerTabId === tabId) {
+    const newIdx = Math.min(idx, prayerTabs.length - 1);
+    switchToPrayerTab(prayerTabs[newIdx].id);
+  }
+  renderTabBar();
+  savePrayerTabsToStorage();
+}
+
+function switchToPrayerTab(tabId) {
+  const tab = prayerTabs.find(t => t.id === tabId);
+  if (!tab) return;
+  activePrayerTabId = tab.id;
+  const textarea = document.getElementById("prayer-textarea");
+  if (textarea) textarea.value = tab.content;
+  updatePrayerPreview();
+  renderTabBar();
+  savePrayerTabsToStorage();
+}
+
+function getActivePrayerTab() {
+  return prayerTabs.find(t => t.id === activePrayerTabId) || null;
+}
+
+function renamePrayerTab(tabId, newName) {
+  const tab = prayerTabs.find(t => t.id === tabId);
+  if (tab) {
+    tab.name = newName;
+    renderTabBar();
+    savePrayerTabsToStorage();
+  }
+}
+
+function startInlineTabRename(tabItem, tabId, currentName) {
+  const titleEl = tabItem.querySelector(".tab-title");
+  if (!titleEl || tabItem.querySelector(".tab-rename-input")) return;
+
+  const input = document.createElement("input");
+  input.className = "tab-rename-input";
+  input.type = "text";
+  input.value = currentName;
+  input.maxLength = 50;
+
+  titleEl.style.display = "none";
+  titleEl.parentNode.insertBefore(input, titleEl);
+  input.focus();
+  input.select();
+
+  const finish = () => {
+    const val = input.value.trim();
+    if (val && val !== currentName) {
+      renamePrayerTab(tabId, val);
+    } else {
+      renderTabBar();
+    }
+  };
+
+  input.addEventListener("blur", finish);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === "Escape") {
+      input.value = currentName;
+      input.blur();
+    }
+    e.stopPropagation();
+  });
+}
+
+function savePrayerTabsToStorage() {
+  localStorage.setItem("bibleCompanion_prayerTabs", JSON.stringify(prayerTabs));
+  localStorage.setItem("bibleCompanion_activePrayerTabId", String(activePrayerTabId));
+  localStorage.setItem("bibleCompanion_nextPrayerTabId", String(nextPrayerTabId));
+}
+
+function loadPrayerTabsFromStorage() {
+  try {
+    const data = JSON.parse(localStorage.getItem("bibleCompanion_prayerTabs"));
+    const savedActiveId = Number(localStorage.getItem("bibleCompanion_activePrayerTabId"));
+    const savedNextId = Number(localStorage.getItem("bibleCompanion_nextPrayerTabId"));
+    if (data && Array.isArray(data) && data.length > 0) {
+      prayerTabs = data;
+      nextPrayerTabId = savedNextId || (Math.max(...prayerTabs.map(t => t.id)) + 1);
+      const restoreId = savedActiveId && prayerTabs.find(t => t.id === savedActiveId) ? savedActiveId : prayerTabs[0].id;
+      activePrayerTabId = restoreId;
+      return true;
+    }
+  } catch {
+    // Ignore parse errors
+  }
+
+  // Migration: check for old prayer storage key
+  const oldData = localStorage.getItem(PRAYER_STORAGE_KEY);
+  if (oldData !== null) {
+    prayerTabs = [{ id: 1, name: "General", content: oldData }];
+    activePrayerTabId = 1;
+    nextPrayerTabId = 2;
+    localStorage.removeItem(PRAYER_STORAGE_KEY);
+    savePrayerTabsToStorage();
+    return true;
+  }
+
+  // Default empty tab
+  prayerTabs = [{ id: 1, name: "General", content: "" }];
+  activePrayerTabId = 1;
+  nextPrayerTabId = 2;
+  savePrayerTabsToStorage();
+  return false;
+}
+
+/* --- End Prayer Tabs --- */
 
 /* --- Theme --- */
 
@@ -615,6 +804,12 @@ function renderChapter() {
   }
 
   container.appendChild(textBlock);
+
+  const bsbNote = document.createElement("div");
+  bsbNote.className = "bible-source-note";
+  bsbNote.textContent = "Scripture text from the Berean Standard Bible (BSB), CC0 Public Domain.";
+  container.appendChild(bsbNote);
+
   setupVerseSelection(textBlock);
   setupStrongTooltips(textBlock);
 }
@@ -759,18 +954,32 @@ function bindKeyboardShortcuts() {
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "t") {
       e.preventDefault();
-      const active = getActiveTab();
-      createTab(active ? active.book : "Genesis", active ? active.chapter : 1);
+      if (isPrayerMode) {
+        createPrayerTab("New List");
+      } else {
+        const active = getActiveTab();
+        createTab(active ? active.book : "Genesis", active ? active.chapter : 1);
+      }
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "w") {
       e.preventDefault();
-      if (activeTabId) closeTab(activeTabId);
+      if (isPrayerMode) {
+        if (activePrayerTabId) closePrayerTab(activePrayerTabId);
+      } else {
+        if (activeTabId) closeTab(activeTabId);
+      }
     }
     if ((e.altKey) && e.key >= "1" && e.key <= "9") {
       e.preventDefault();
       const idx = Number(e.key) - 1;
-      if (idx < tabs.length) {
-        switchToTab(tabs[idx].id);
+      if (isPrayerMode) {
+        if (idx < prayerTabs.length) {
+          switchToPrayerTab(prayerTabs[idx].id);
+        }
+      } else {
+        if (idx < tabs.length) {
+          switchToTab(tabs[idx].id);
+        }
       }
     }
   });
@@ -1252,7 +1461,6 @@ function registerServiceWorker() {
 function switchMode(mode) {
   const wasPrayerMode = isPrayerMode;
   isPrayerMode = mode === "prayer";
-  const splitContainer = document.getElementById("split-container");
   const bibleReader = document.getElementById("bible-reader");
   const splitter = document.getElementById("splitter");
   const navigationBar = document.getElementById("navigation-bar");
@@ -1272,7 +1480,8 @@ function switchMode(mode) {
     navigationBar.classList.add("hidden");
     aiPanel.classList.add("hidden");
     prayerEditor.classList.remove("hidden");
-    tabBar.classList.add("hidden");
+    tabBar.classList.remove("hidden");
+    renderTabBar();
     restorePrayerText();
   } else {
     bibleReader.classList.remove("hidden");
@@ -1281,21 +1490,25 @@ function switchMode(mode) {
     aiPanel.classList.remove("hidden");
     prayerEditor.classList.add("hidden");
     tabBar.classList.remove("hidden");
+    renderTabBar();
   }
 }
 
 function savePrayerText() {
   const textarea = document.getElementById("prayer-textarea");
-  const text = textarea.value;
-  localStorage.setItem(PRAYER_STORAGE_KEY, text);
+  const tab = getActivePrayerTab();
+  if (tab) {
+    tab.content = textarea.value;
+    savePrayerTabsToStorage();
+  }
   showPrayerStatus("Saved");
 }
 
 function restorePrayerText() {
+  const tab = getActivePrayerTab();
   const textarea = document.getElementById("prayer-textarea");
-  const saved = localStorage.getItem(PRAYER_STORAGE_KEY);
-  if (saved !== null) {
-    textarea.value = saved;
+  if (tab && textarea) {
+    textarea.value = tab.content;
   }
   updatePrayerPreview();
 }
@@ -1691,6 +1904,8 @@ function initPrayerMode() {
   if (enhanceBtn) enhanceBtn.addEventListener("click", enhancePrayerWithAI);
   if (undoBtn) undoBtn.addEventListener("click", undoPrayerEnhancement);
 
+  loadPrayerTabsFromStorage();
+
   let saveTimeout = null;
   prayerTextarea.addEventListener("input", () => {
     updatePrayerPreview();
@@ -1700,14 +1915,9 @@ function initPrayerMode() {
     }, 800);
   });
 
-  const saved = localStorage.getItem(PRAYER_STORAGE_KEY);
-  if (saved) {
-    prayerTextarea.value = saved;
-  }
-
   updatePrayerSignatureDisplay();
 
-initPrayerSplitter();
+ initPrayerSplitter();
 }
 
 function updatePrayerSignatureDisplay() {
