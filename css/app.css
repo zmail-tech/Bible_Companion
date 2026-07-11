@@ -1471,6 +1471,11 @@ header#app-header {
 
 [data-theme="modern"] .chapter-heading {
   border-bottom: 1px solid var(--border-light);
+  color: var(--gold-light);
+}
+
+[data-theme="modern"] .section-heading {
+  color: var(--gold-light);
 }
 
 [data-theme="modern"] .section-heading.s1 {
