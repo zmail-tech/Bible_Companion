@@ -1606,6 +1606,20 @@ header#app-header {
   border-radius: 4px;
 }
 
+[data-theme="modern"] #ai-response h1,
+[data-theme="modern"] #ai-response h2,
+[data-theme="modern"] #ai-response h3 {
+  color: var(--gold-light);
+}
+
+[data-theme="modern"] #ai-response strong {
+  color: var(--gold-light);
+}
+
+[data-theme="modern"] #ai-response em {
+  color: var(--gold-light);
+}
+
 [data-theme="modern"] #ai-response hr.markdown-hr {
   border-top-color: var(--border-dark);
 }
