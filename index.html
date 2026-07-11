@@ -14,7 +14,10 @@
     <header id="app-header">
       <h1>Bible Companion</h1>
       <div class="header-controls">
-        <span id="provider-status" class="provider-status" title="Active AI provider and model"></span>
+        <div class="model-switcher">
+          <span id="provider-status" class="provider-status" title="Click to change commentary model"></span>
+          <select id="header-model-select"></select>
+        </div>
         <button id="settings-btn" class="icon-btn" aria-label="Settings" title="Settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>

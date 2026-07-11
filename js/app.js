@@ -20,7 +20,7 @@ Your purpose is to provide commentary on Bible passages.
 - **Accuracy:** Ensure responses are unbiased, positive, and accurate.`;
 
 import { loadBibleData, isLoaded, getBooks, getOldTestament, getNewTestament, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference, goNextChapter, goPrevChapter } from "./bible.js";
-import { loadSettingsLocally, getActiveProvider, getCommentaryModel, getPrayerModel, getPrayerSignature } from "./settings.js";
+import { loadSettingsLocally, getActiveProvider, getCommentaryModel, getPrayerModel, getPrayerSignature, setCommentaryModel, buildAggregatedModelList, getSettings } from "./settings.js";
 
 const INTENT_PROMPTS = {
   commentary: "Provide a detailed theological commentary on the selected passage. Use Southern Baptist theological perspectives and explain the text clearly.",
@@ -287,6 +287,57 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+function initModelSwitcher() {
+  const switcher = document.querySelector(".model-switcher");
+  const select = document.getElementById("header-model-select");
+  if (!switcher || !select) return;
+
+  function populateDropdown() {
+    const models = buildAggregatedModelList();
+    select.innerHTML = "";
+    if (models.length === 0) {
+      const opt = document.createElement("option");
+      opt.textContent = "No models — open Settings to refresh";
+      opt.disabled = true;
+      select.appendChild(opt);
+      return;
+    }
+    for (const m of models) {
+      const opt = document.createElement("option");
+      opt.value = m.providerId + "::" + m.modelId;
+      opt.textContent = m.displayName;
+      select.appendChild(opt);
+    }
+    select.value = getSettings().commentaryModel || "";
+  }
+
+  populateDropdown();
+
+  switcher.addEventListener("click", (e) => {
+    e.stopPropagation();
+    switcher.classList.toggle("open");
+  });
+
+  select.addEventListener("change", () => {
+    const value = select.value;
+    if (value) {
+      setCommentaryModel(value);
+      if (window.updateProviderStatus) window.updateProviderStatus();
+    }
+    switcher.classList.remove("open");
+  });
+
+  select.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!switcher.contains(e.target)) {
+      switcher.classList.remove("open");
+    }
+  });
+}
+
 function bootstrap() {
   const persisted = loadSettingsLocally();
   console.log("[app] bootstrap: persisted settings =", persisted);
@@ -314,6 +365,7 @@ async function startApp() {
   initTheme();
   initSplitter();
   updateProviderStatus();
+  initModelSwitcher();
   populateBookSelect();
   bindNavigationEvents();
   bindSendButton();
