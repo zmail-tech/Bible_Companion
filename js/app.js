@@ -20,7 +20,7 @@ Your purpose is to provide commentary on Bible passages.
 - **Accuracy:** Ensure responses are unbiased, positive, and accurate.`;
 
 import { loadBibleData, isLoaded, getBooks, getOldTestament, getNewTestament, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference, goNextChapter, goPrevChapter } from "./bible.js";
-import { loadSettingsLocally, getActiveProvider, getCommentaryModel, getPrayerModel, getPrayerSignature, getEmailSubject, setCommentaryModel, buildAggregatedModelList, getSettings } from "./settings.js";
+import { loadSettingsLocally, getActiveProvider, getCommentaryModel, getPrayerModel, getPrayerSignature, getEmailSubject, getEmailGreeting, setCommentaryModel, buildAggregatedModelList, getSettings } from "./settings.js";
 
 const INTENT_PROMPTS = {
   commentary: "Provide a detailed theological commentary on the selected passage. Use Southern Baptist theological perspectives and explain the text clearly.",
@@ -1989,13 +1989,18 @@ function sendPrayerEmail() {
     return;
   }
   const signature = getPrayerSignature();
+  const greeting = getEmailGreeting();
   const subject = getEmailSubject();
 
-  let htmlContent = preview.innerHTML;
+  let htmlContent = "";
+  if (greeting) {
+    htmlContent += "<div>" + escapeHtml(greeting).replace(/\n/g, "<br>") + "</div>";
+  }
+  htmlContent += preview.innerHTML.trim();
   htmlContent = htmlContent.replace(/<(h[1-6])>/g, "<br><$1>");
   htmlContent += "<br><p>" + escapeHtml(signature).replace(/\n/g, "<br>") + "</p>";
-  const spacedText = text.replace(/^#+\s/gm, "\n$&");
-  const plainText = spacedText + "\n\n" + signature;
+  const spacedText = text.replace(/^#+\s/gm, "\n$&").trim();
+  const plainText = (greeting ? greeting + "\n" : "") + spacedText + "\n" + signature;
 
   try {
     if (navigator.clipboard && navigator.clipboard.write) {

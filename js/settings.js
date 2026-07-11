@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS = {
   ],
   activeProviderId: "default",
   prayerSignature: "\u2014 Bible Companion",
+  emailGreeting: "",
   emailSubject: "Prayer List",
   commentaryModel: null,
   prayerModel: null
@@ -126,6 +127,15 @@ export function setEmailSubject(val) {
   saveSettingsLocally();
 }
 
+export function getEmailGreeting() {
+  return settings.emailGreeting || "";
+}
+
+export function setEmailGreeting(val) {
+  settings.emailGreeting = val ?? "";
+  saveSettingsLocally();
+}
+
 export function getCommentaryModel() {
   if (!settings.commentaryModel) return null;
   const parts = settings.commentaryModel.split("::");
@@ -196,6 +206,9 @@ export function loadSettingsLocally() {
       }
       if (parsed.emailSubject === undefined || parsed.emailSubject === null) {
         parsed.emailSubject = DEFAULT_SETTINGS.emailSubject;
+      }
+      if (parsed.emailGreeting === undefined || parsed.emailGreeting === null) {
+        parsed.emailGreeting = DEFAULT_SETTINGS.emailGreeting;
       }
       return parsed;
     }
@@ -356,6 +369,7 @@ function initSettingsModal() {
   const form = document.getElementById("settings-form");
   const resetBtn = document.getElementById("reset-settings");
   const prayerSignatureInput = document.getElementById("prayer-signature-input");
+  const emailGreetingInput = document.getElementById("email-greeting-input");
   const emailSubjectInput = document.getElementById("email-subject-input");
 
   const providerNameInput = document.getElementById("provider-name");
@@ -459,6 +473,7 @@ function initSettingsModal() {
     const savedTheme = localStorage.getItem("bibleCompanion_theme") || "light";
     themeSelect.value = savedTheme;
     prayerSignatureInput.value = getPrayerSignature();
+    if (emailGreetingInput) emailGreetingInput.value = getEmailGreeting();
     if (emailSubjectInput) emailSubjectInput.value = getEmailSubject();
     updateDeleteButtonState();
     switchSettingsPane("general");
@@ -596,6 +611,9 @@ function initSettingsModal() {
     if (prayerSignatureInput) {
       prayerSignatureInput.value = getPrayerSignature();
     }
+    if (emailGreetingInput) {
+      emailGreetingInput.value = getEmailGreeting();
+    }
     if (emailSubjectInput) {
       emailSubjectInput.value = getEmailSubject();
     }
@@ -640,6 +658,10 @@ function initSettingsModal() {
       const newSig = prayerSignatureInput.value.trim();
       setPrayerSignature(newSig);
       if (window.updatePrayerSignatureDisplay) window.updatePrayerSignatureDisplay();
+    }
+    if (emailGreetingInput) {
+      const newGreeting = emailGreetingInput.value;
+      setEmailGreeting(newGreeting);
     }
     if (emailSubjectInput) {
       const newSubj = emailSubjectInput.value.trim();
