@@ -20,7 +20,7 @@ Your purpose is to provide commentary on Bible passages.
 - **Accuracy:** Ensure responses are unbiased, positive, and accurate.`;
 
 import { loadBibleData, isLoaded, getBooks, getOldTestament, getNewTestament, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference, goNextChapter, goPrevChapter } from "./bible.js";
-import { loadSettingsLocally, getActiveProvider, getCommentaryModel, getPrayerModel, getPrayerSignature, getEmailSubject, getEmailGreeting, setCommentaryModel, buildAggregatedModelList, getSettings } from "./settings.js";
+import { loadSettingsLocally, getActiveProvider, getCommentaryModel, getPrayerModel, getSmallModel, getPrayerSignature, getEmailSubject, getEmailGreeting, setCommentaryModel, buildAggregatedModelList, getSettings } from "./settings.js";
 
 const INTENT_PROMPTS = {
   commentary: "Provide a detailed theological commentary on the selected passage. Use Southern Baptist theological perspectives and explain the text clearly.",
@@ -1094,6 +1094,11 @@ function handleFollowUp() {
   sendToAI(null, text);
 }
 
+function handleFollowUpFromText(text) {
+  if (!text || isLoading) return;
+  sendToAI(null, text);
+}
+
 function initAiInput() {
   const sendBtn = document.getElementById("ai-send-btn");
   const input = document.getElementById("ai-input");
@@ -1187,6 +1192,11 @@ async function sendToAI(intentKey, followUpText) {
       });
 
       await streamAIResponse(provider, responseEl, statusEl, tab, requestBody);
+
+      const lastEntry = tab.chatHistory[tab.chatHistory.length - 1];
+      if (lastEntry && lastEntry.role === "assistant") {
+        await generateFollowUpQuestions(lastEntry.content, responseEl);
+      }
     }
   } finally {
     isLoading = false;
@@ -1381,6 +1391,68 @@ async function streamAIResponse(provider, responseEl, statusEl, tab, requestBody
     responseEl.appendChild(errP);
     statusEl.textContent = "Error";
     tab.aiStatus = "Error";
+  }
+}
+
+async function generateFollowUpQuestions(commentaryText, responseEl) {
+  const smallConfig = getSmallModel();
+  if (!smallConfig) return;
+
+  const provider = smallConfig.provider;
+  const headers = { "Content-Type": "application/json" };
+  if (provider.apiKey) {
+    headers["Authorization"] = `Bearer ${provider.apiKey}`;
+  }
+
+  const prompt = `Read the following Bible commentary carefully. Generate exactly 3 thoughtful follow-up questions a reader might want to ask a theologian about this commentary. Output only the 3 questions, one per line, with no numbering, bullets, or extra text.\n\n${commentaryText}`;
+
+  try {
+    const res = await fetch(provider.endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: smallConfig.modelId,
+        messages: [
+          { role: "system", content: "You are a helpful Bible study assistant. Generate concise, thoughtful questions." },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: 512,
+        temperature: 0.7
+      })
+    });
+
+    if (!res.ok) return;
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || "";
+    if (!content) return;
+
+    const questions = content
+      .split("\n")
+      .map(q => q.replace(/^[\d\-\*\•]+\s*/, "").trim())
+      .filter(Boolean)
+      .slice(0, 3);
+
+    if (questions.length === 0) return;
+
+    const container = document.createElement("div");
+    container.className = "follow-up-questions";
+
+    for (const q of questions) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "follow-up-btn";
+      btn.textContent = q;
+      btn.addEventListener("click", () => {
+        container.remove();
+        handleFollowUpFromText(q);
+      });
+      container.appendChild(btn);
+    }
+
+    responseEl.appendChild(container);
+    responseEl.scrollTop = responseEl.scrollHeight;
+  } catch {
+    // Silently fail — questions are optional
   }
 }
 
@@ -2134,6 +2206,7 @@ function updatePrayerSignatureDisplay() {
 }
 
 window.updatePrayerSignatureDisplay = updatePrayerSignatureDisplay;
+window.handleFollowUpFromText = handleFollowUpFromText;
 
 /* --- Recipients --- */
 

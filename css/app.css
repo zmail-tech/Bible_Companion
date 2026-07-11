@@ -1098,6 +1098,53 @@ header#app-header {
   cursor: not-allowed;
 }
 
+/* --- Follow-up Questions --- */
+
+.follow-up-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border-top: 1px solid var(--border-dark);
+}
+
+.follow-up-btn {
+  background: var(--bible-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-dark);
+  border-left: 3px solid var(--gold);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.follow-up-btn:hover {
+  background: var(--accent-light);
+}
+
+.follow-up-btn:active {
+  background: var(--gold);
+  color: #fff;
+}
+
+[data-theme="modern"] .follow-up-questions {
+  border-top-color: #3a3f4b;
+}
+
+[data-theme="modern"] .follow-up-btn {
+  border-radius: 6px;
+  background: #1e2128;
+}
+
+[data-theme="modern"] .follow-up-btn:hover {
+  background: #2a2f3a;
+}
+
 /* --- AI Chat Messages --- */
 
 .ai-user-message {
