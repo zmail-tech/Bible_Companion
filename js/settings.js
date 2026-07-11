@@ -256,6 +256,12 @@ function saveSettingsLocally() {
   }
 }
 
+function normalizeEndpoint(input) {
+  if (!input) return input;
+  if (input.startsWith("http://") || input.startsWith("https://")) return input;
+  return `https://${input}/v1/chat/completions`;
+}
+
 function deriveModelsUrl(endpointUrl) {
   try {
     let url = endpointUrl.replace(/\/+$/, "");
@@ -324,7 +330,7 @@ function addProvider(data) {
   const provider = {
     id,
     name: data.name || "",
-    endpoint: data.endpoint || "",
+    endpoint: normalizeEndpoint(data.endpoint) || "",
     apiKey: data.apiKey || ""
   };
   console.log("[settings] Created provider:", provider);
@@ -350,7 +356,7 @@ function deleteProvider(id) {
 function updateProvider(id, data) {
   const provider = getProviderById(id);
   if (!provider) return false;
-  if (data.endpoint !== undefined) provider.endpoint = data.endpoint;
+  if (data.endpoint !== undefined) provider.endpoint = normalizeEndpoint(data.endpoint);
   if (data.apiKey !== undefined) provider.apiKey = data.apiKey;
   if (data.name !== undefined) provider.name = data.name;
   saveSettingsLocally();
@@ -667,7 +673,7 @@ function initSettingsModal() {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const newEndpoint = endpointInput.value.trim();
+    const newEndpoint = normalizeEndpoint(endpointInput.value.trim());
     const rawApiKey = apiKeyInput.value;
 
     const useExistingKey = apiKeyInput.dataset.hasKey === "true";
