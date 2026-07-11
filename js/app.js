@@ -78,6 +78,7 @@ function closeTab(tabId) {
 function switchToTab(tabId) {
   const tab = tabs.find(t => t.id === tabId);
   if (!tab) return;
+  if (isPrayerMode) switchMode("bible");
   activeTabId = tab.id;
   setCurrentBook(tab.book);
   setCurrentChapter(tab.chapter);
