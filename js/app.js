@@ -20,7 +20,7 @@ Your purpose is to provide commentary on Bible passages.
 - **Accuracy:** Ensure responses are unbiased, positive, and accurate.`;
 
 import { loadBibleData, isLoaded, getBooks, getOldTestament, getNewTestament, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference, goNextChapter, goPrevChapter } from "./bible.js";
-import { loadSettingsLocally, getActiveProvider, getCommentaryModel, getPrayerModel, getPrayerSignature, setCommentaryModel, buildAggregatedModelList, getSettings } from "./settings.js";
+import { loadSettingsLocally, getActiveProvider, getCommentaryModel, getPrayerModel, getPrayerSignature, getEmailSubject, setCommentaryModel, buildAggregatedModelList, getSettings } from "./settings.js";
 
 const INTENT_PROMPTS = {
   commentary: "Provide a detailed theological commentary on the selected passage. Use Southern Baptist theological perspectives and explain the text clearly.",
@@ -258,6 +258,7 @@ function createPrayerTab(name, content) {
     id,
     name: name || "New List",
     content: content || "",
+    recipients: "",
   };
   prayerTabs.push(tab);
   switchToPrayerTab(id);
@@ -285,6 +286,7 @@ function switchToPrayerTab(tabId) {
   const textarea = document.getElementById("prayer-textarea");
   if (textarea) textarea.value = tab.content;
   updatePrayerPreview();
+  updateRecipientsButton();
   renderTabBar();
   savePrayerTabsToStorage();
 }
@@ -351,7 +353,7 @@ function loadPrayerTabsFromStorage() {
     const savedActiveId = Number(localStorage.getItem("bibleCompanion_activePrayerTabId"));
     const savedNextId = Number(localStorage.getItem("bibleCompanion_nextPrayerTabId"));
     if (data && Array.isArray(data) && data.length > 0) {
-      prayerTabs = data;
+      prayerTabs = data.map(t => ({ ...t, recipients: t.recipients || "" }));
       nextPrayerTabId = savedNextId || (Math.max(...prayerTabs.map(t => t.id)) + 1);
       const restoreId = savedActiveId && prayerTabs.find(t => t.id === savedActiveId) ? savedActiveId : prayerTabs[0].id;
       activePrayerTabId = restoreId;
@@ -364,7 +366,7 @@ function loadPrayerTabsFromStorage() {
   // Migration: check for old prayer storage key
   const oldData = localStorage.getItem(PRAYER_STORAGE_KEY);
   if (oldData !== null) {
-    prayerTabs = [{ id: 1, name: "General", content: oldData }];
+    prayerTabs = [{ id: 1, name: "General", content: oldData, recipients: "" }];
     activePrayerTabId = 1;
     nextPrayerTabId = 2;
     localStorage.removeItem(PRAYER_STORAGE_KEY);
@@ -373,7 +375,7 @@ function loadPrayerTabsFromStorage() {
   }
 
   // Default empty tab
-  prayerTabs = [{ id: 1, name: "General", content: "" }];
+  prayerTabs = [{ id: 1, name: "General", content: "", recipients: "" }];
   activePrayerTabId = 1;
   nextPrayerTabId = 2;
   savePrayerTabsToStorage();
@@ -1634,7 +1636,8 @@ async function copyPrayerToClipboard() {
   const signature = getPrayerSignature();
 
   // Build formatted HTML from the preview + signature
-  const htmlContent = preview.innerHTML + "<p>" + escapeHtml(signature) + "</p>";
+  const sigHtml = escapeHtml(signature).replace(/\n/g, "<br>");
+  const htmlContent = preview.innerHTML + "<p>" + sigHtml + "</p>";
   // Build plain-text fallback: raw markdown + signature
   const plainText = text + "\n\n" + signature;
 
@@ -1971,12 +1974,70 @@ function updateUndoButton() {
   undoBtn.disabled = textarea.dataset.originalText === undefined;
 }
 
+function sendPrayerEmail() {
+  const tab = getActivePrayerTab();
+  if (!tab || !tab.recipients || !tab.recipients.trim()) {
+    showPrayerStatus("No recipients configured");
+    return;
+  }
+
+  const textarea = document.getElementById("prayer-textarea");
+  const preview = document.getElementById("prayer-preview");
+  const text = textarea.value.trim();
+  if (!text) {
+    showPrayerStatus("Nothing to copy");
+    return;
+  }
+  const signature = getPrayerSignature();
+  const subject = getEmailSubject();
+
+  let htmlContent = preview.innerHTML;
+  htmlContent = htmlContent.replace(/<(h[1-6])>/g, "<br><$1>");
+  htmlContent += "<br><p>" + escapeHtml(signature).replace(/\n/g, "<br>") + "</p>";
+  const spacedText = text.replace(/^#+\s/gm, "\n$&");
+  const plainText = spacedText + "\n\n" + signature;
+
+  try {
+    if (navigator.clipboard && navigator.clipboard.write) {
+      const htmlBlob = new Blob([htmlContent], { type: "text/html" });
+      const textBlob = new Blob([plainText], { type: "text/plain" });
+      const item = new ClipboardItem({
+        "text/html": htmlBlob,
+        "text/plain": textBlob,
+      });
+      navigator.clipboard.write([item]);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = plainText;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      ta.style.top = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch (e) {
+        showPrayerStatus("Copy failed");
+      } finally {
+        document.body.removeChild(ta);
+      }
+    }
+  } catch {
+    showPrayerStatus("Copy failed");
+  }
+
+  const mailtoUrl = `mailto:${encodeURIComponent(tab.recipients)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(sanitizeHtml(plainText))}`;
+  window.location.href = mailtoUrl;
+  showPrayerStatus("Prayer list copied to clipboard. Opening email client...");
+}
+
 function initPrayerMode() {
   const bibleTab = document.getElementById("mode-bible-tab");
   const prayerTab = document.getElementById("mode-prayer-tab");
   const prayerTextarea = document.getElementById("prayer-textarea");
   const prayerCopyBtn = document.getElementById("prayer-copy-btn");
   const prayerSaveBtn = document.getElementById("prayer-save-btn");
+  const prayerSendEmailBtn = document.getElementById("prayer-send-email-btn");
   const enhanceBtn = document.getElementById("enhance-prayer-btn");
   const undoBtn = document.getElementById("undo-prayer-btn");
 
@@ -1984,6 +2045,7 @@ function initPrayerMode() {
   prayerTab.addEventListener("click", () => switchMode("prayer"));
   prayerCopyBtn.addEventListener("click", copyPrayerToClipboard);
   prayerSaveBtn.addEventListener("click", savePrayerText);
+  if (prayerSendEmailBtn) prayerSendEmailBtn.addEventListener("click", sendPrayerEmail);
   if (enhanceBtn) enhanceBtn.addEventListener("click", enhancePrayerWithAI);
   if (undoBtn) undoBtn.addEventListener("click", undoPrayerEnhancement);
 
@@ -2000,7 +2062,8 @@ function initPrayerMode() {
 
   updatePrayerSignatureDisplay();
 
- initPrayerSplitter();
+  if (typeof initPrayerSplitter === "function") initPrayerSplitter();
+  initRecipients();
 }
 
 function updatePrayerSignatureDisplay() {
@@ -2009,5 +2072,70 @@ function updatePrayerSignatureDisplay() {
 }
 
 window.updatePrayerSignatureDisplay = updatePrayerSignatureDisplay;
+
+/* --- Recipients --- */
+
+function getRecipientsCount(recipientsStr) {
+  if (!recipientsStr || !recipientsStr.trim()) return 0;
+  return recipientsStr.split(",").filter(e => e.trim()).length;
+}
+
+function updateRecipientsButton() {
+  const btn = document.getElementById("prayer-recipients-btn");
+  if (!btn) return;
+  const tab = getActivePrayerTab();
+  const count = tab ? getRecipientsCount(tab.recipients) : 0;
+  const span = btn.querySelector("span");
+  if (span) {
+    span.textContent = count > 0 ? `Recipients (${count})` : "Recipients";
+  }
+}
+
+function openRecipientsModal() {
+  const modal = document.getElementById("recipients-modal");
+  const textarea = document.getElementById("recipients-textarea");
+  const tab = getActivePrayerTab();
+  if (modal) {
+    if (tab) textarea.value = tab.recipients || "";
+    modal.classList.add("active");
+  }
+}
+
+function closeRecipientsModal() {
+  const modal = document.getElementById("recipients-modal");
+  if (modal) modal.classList.remove("active");
+}
+
+function saveRecipients() {
+  const textarea = document.getElementById("recipients-textarea");
+  const tab = getActivePrayerTab();
+  if (!tab || !textarea) return;
+  const raw = textarea.value.trim();
+  if (raw) {
+    const emails = raw.split(",").map(e => e.trim()).filter(e => e);
+    tab.recipients = emails.join(", ");
+  } else {
+    tab.recipients = "";
+  }
+  savePrayerTabsToStorage();
+  updateRecipientsButton();
+  closeRecipientsModal();
+}
+
+function initRecipients() {
+  const openBtn = document.getElementById("prayer-recipients-btn");
+  const closeBtn = document.getElementById("close-recipients");
+  const saveBtn = document.getElementById("recipients-save-btn");
+  const cancelBtn = document.getElementById("recipients-cancel-btn");
+  const modal = document.getElementById("recipients-modal");
+
+  if (openBtn) openBtn.addEventListener("click", openRecipientsModal);
+  if (closeBtn) closeBtn.addEventListener("click", closeRecipientsModal);
+  if (saveBtn) saveBtn.addEventListener("click", saveRecipients);
+  if (cancelBtn) cancelBtn.addEventListener("click", closeRecipientsModal);
+  if (modal) {
+    modal.querySelector(".modal-overlay").addEventListener("click", closeRecipientsModal);
+  }
+}
 
 bootstrap();

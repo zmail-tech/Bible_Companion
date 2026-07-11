@@ -118,6 +118,19 @@
               Copy
             </button>
             <button id="prayer-save-btn" class="btn-secondary" title="Save prayer text">Save</button>
+            <button id="prayer-recipients-btn" class="btn-secondary" title="Manage recipients">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+              </svg>
+              Recipients
+            </button>
+            <button id="prayer-send-email-btn" class="btn-secondary" title="Send prayer list via email">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
+              </svg>
+              Send Email
+            </button>
           </div>
         </section>
 
@@ -164,8 +177,13 @@
               </div>
               <div class="form-group">
                 <label for="prayer-signature-input">Prayer Signature</label>
-                <input type="text" id="prayer-signature-input" placeholder="— Bible Companion">
+                <textarea id="prayer-signature-input" placeholder="— Bible Companion" rows="3"></textarea>
                 <small class="form-hint">Signature appended when copying prayer text and shown in the footer.</small>
+              </div>
+              <div class="form-group">
+                <label for="email-subject-input">Email Subject</label>
+                <input type="text" id="email-subject-input" placeholder="Prayer List">
+                <small class="form-hint">Subject line used when sending prayer list via email.</small>
               </div>
               <div class="bsb-acknowledgement">
                 <h3>Berean Standard Bible (BSB)</h3>
@@ -244,6 +262,32 @@
           <button type="submit" class="btn-primary">Save Settings</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div id="recipients-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="recipients-title">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="recipients-title">Recipients</h2>
+        <button id="close-recipients" class="icon-btn" aria-label="Close recipients">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div style="padding: 1.25rem;">
+        <div class="form-group">
+          <label for="recipients-textarea">Email Addresses</label>
+          <textarea id="recipients-textarea" rows="4" style="width: 100%; resize: vertical; background: var(--bible-bg); border-top: 2px solid var(--bevel-dark); border-left: 2px solid var(--bevel-dark); border-bottom: 2px solid var(--bevel-light); border-right: 2px solid var(--bevel-light); color: var(--text-primary); padding: 0.5rem 0.625rem; font-size: 0.875rem; font-family: &quot;Times New Roman&quot;, Times, Georgia, serif;" placeholder="Enter comma-separated email addresses"></textarea>
+          <small class="form-hint">One or more email addresses, separated by commas.</small>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="recipients-cancel-btn" class="btn-secondary">Cancel</button>
+          <button type="button" id="recipients-save-btn" class="btn-primary">Save</button>
+        </div>
+      </div>
     </div>
   </div>
 

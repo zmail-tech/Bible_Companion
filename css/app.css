@@ -1243,7 +1243,8 @@ header#app-header {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
   width: 100%;
   background: var(--bible-bg);
   border-top: 2px solid var(--bevel-dark);
@@ -1257,7 +1258,8 @@ header#app-header {
 }
 
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
   outline: 1px dotted var(--burgundy);
 }
 
@@ -1458,6 +1460,7 @@ header#app-header {
 [data-theme="modern"] .form-group label,
 [data-theme="modern"] .form-group input,
 [data-theme="modern"] .form-group select,
+[data-theme="modern"] .form-group textarea,
 [data-theme="modern"] .form-hint,
 [data-theme="modern"] .icon-btn-models,
 [data-theme="modern"] .modal-header h2,
@@ -1592,6 +1595,7 @@ header#app-header {
 
 [data-theme="modern"] .form-group input,
 [data-theme="modern"] .form-group select,
+[data-theme="modern"] .form-group textarea,
 [data-theme="modern"] .model-selector-row select,
 [data-theme="modern"] .model-selector-row input {
   border: 1px solid var(--border-light);
@@ -1600,6 +1604,7 @@ header#app-header {
 
 [data-theme="modern"] .form-group input:focus,
 [data-theme="modern"] .form-group select:focus,
+[data-theme="modern"] .form-group textarea:focus,
 [data-theme="modern"] .model-selector-row select:focus,
 [data-theme="modern"] .model-selector-row input:focus {
   outline: 2px solid var(--burgundy);
@@ -2152,6 +2157,7 @@ header#app-header {
   font-style: italic;
   color: var(--text-muted);
   font-family: "Times New Roman", Times, Georgia, serif;
+  white-space: pre-line;
 }
 
 /* --- Modern Theme Prayer Overrides --- */

@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS = {
   ],
   activeProviderId: "default",
   prayerSignature: "\u2014 Bible Companion",
+  emailSubject: "Prayer List",
   commentaryModel: null,
   prayerModel: null
 };
@@ -116,6 +117,15 @@ export function setPrayerSignature(val) {
   saveSettingsLocally();
 }
 
+export function getEmailSubject() {
+  return settings.emailSubject || "Prayer List";
+}
+
+export function setEmailSubject(val) {
+  settings.emailSubject = val ?? "Prayer List";
+  saveSettingsLocally();
+}
+
 export function getCommentaryModel() {
   if (!settings.commentaryModel) return null;
   const parts = settings.commentaryModel.split("::");
@@ -183,6 +193,9 @@ export function loadSettingsLocally() {
       }
       if (parsed.prayerSignature === undefined || parsed.prayerSignature === null) {
         parsed.prayerSignature = DEFAULT_SETTINGS.prayerSignature;
+      }
+      if (parsed.emailSubject === undefined || parsed.emailSubject === null) {
+        parsed.emailSubject = DEFAULT_SETTINGS.emailSubject;
       }
       return parsed;
     }
@@ -343,6 +356,7 @@ function initSettingsModal() {
   const form = document.getElementById("settings-form");
   const resetBtn = document.getElementById("reset-settings");
   const prayerSignatureInput = document.getElementById("prayer-signature-input");
+  const emailSubjectInput = document.getElementById("email-subject-input");
 
   const providerNameInput = document.getElementById("provider-name");
   const endpointInput = document.getElementById("endpoint-url");
@@ -445,6 +459,7 @@ function initSettingsModal() {
     const savedTheme = localStorage.getItem("bibleCompanion_theme") || "light";
     themeSelect.value = savedTheme;
     prayerSignatureInput.value = getPrayerSignature();
+    if (emailSubjectInput) emailSubjectInput.value = getEmailSubject();
     updateDeleteButtonState();
     switchSettingsPane("general");
     modal.classList.add("active");
@@ -581,6 +596,9 @@ function initSettingsModal() {
     if (prayerSignatureInput) {
       prayerSignatureInput.value = getPrayerSignature();
     }
+    if (emailSubjectInput) {
+      emailSubjectInput.value = getEmailSubject();
+    }
     populateModelDropdowns();
     setStatus("Settings reset to defaults.", "success");
   });
@@ -622,6 +640,10 @@ function initSettingsModal() {
       const newSig = prayerSignatureInput.value.trim();
       setPrayerSignature(newSig);
       if (window.updatePrayerSignatureDisplay) window.updatePrayerSignatureDisplay();
+    }
+    if (emailSubjectInput) {
+      const newSubj = emailSubjectInput.value.trim();
+      setEmailSubject(newSubj);
     }
   });
 
