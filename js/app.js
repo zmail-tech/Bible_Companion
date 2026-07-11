@@ -901,6 +901,11 @@ function renderChapter() {
   bsbNote.textContent = "Scripture text from the Berean Standard Bible (BSB), CC0 Public Domain.";
   container.appendChild(bsbNote);
 
+  const disclaimer = document.createElement("div");
+  disclaimer.className = "bible-source-note";
+  disclaimer.textContent = "Note: LLMs can and do make mistakes. Always verify important information against the Bible text itself.";
+  container.appendChild(disclaimer);
+
   setupVerseSelection(textBlock);
   setupStrongTooltips(textBlock);
 }
