@@ -1407,6 +1407,8 @@ async function generateFollowUpQuestions(commentaryText, responseEl) {
   const prompt = `Read the following Bible commentary carefully. Generate exactly 3 thoughtful follow-up questions a reader might want to ask a theologian about this commentary. Output only the 3 questions, one per line, with no numbering, bullets, or extra text.\n\n${commentaryText}`;
 
   try {
+    console.log("[followup] Generating follow-up questions", { model: smallConfig.modelId, commentaryLength: commentaryText.length });
+
     const res = await fetch(provider.endpoint, {
       method: "POST",
       headers,
@@ -1416,23 +1418,56 @@ async function generateFollowUpQuestions(commentaryText, responseEl) {
           { role: "system", content: "You are a helpful Bible study assistant. Generate concise, thoughtful questions." },
           { role: "user", content: prompt }
         ],
-        max_tokens: 512,
-        temperature: 0.7
+        max_tokens: 1024,
+        temperature: 0.3
       })
     });
 
-    if (!res.ok) return;
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || "";
-    if (!content) return;
+    if (!res.ok) {
+      console.warn("[followup] HTTP error", { status: res.status, statusText: res.statusText });
+      return;
+    }
 
-    const questions = content
+    const data = await res.json();
+    let content = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || "";
+    if (!content) {
+      console.warn("[followup] Empty response content", { choices: data.choices });
+      return;
+    }
+
+    // Strip thinking/reasoning tags that some models output
+    content = stripThinkingTags(content);
+
+    // Parse: split by newlines, strip numbering/bullets, filter empty lines
+    let rawLines = content
       .split("\n")
       .map(q => q.replace(/^[\d\-\*\•]+\s*/, "").trim())
-      .filter(Boolean)
+      .filter(Boolean);
+
+    console.log("[followup] Raw lines from model", { count: rawLines.length, lines: rawLines });
+
+    // If we got fewer than 3 lines, try splitting on question marks to recover
+    // questions that were output on a single line or in a paragraph format
+    if (rawLines.length < 3) {
+      const joined = rawLines.join(" ");
+      rawLines = joined
+        .split(/\?(?=\s*(?:[A-Z]|\d|\-|\*|$))/)
+        .map(part => part.trim() + "?")
+        .filter(Boolean);
+      console.log("[followup] After question-mark split", { count: rawLines.length, lines: rawLines });
+    }
+
+    // Filter to only lines that look like questions (end with '?' or contain question words)
+    const questions = rawLines
+      .filter(line => line.endsWith("?") || /\b(why|how|what|who|when|where|which|could|would|should)\b/i.test(line))
       .slice(0, 3);
 
-    if (questions.length === 0) return;
+    console.log("[followup] Filtered questions", { count: questions.length, questions });
+
+    if (questions.length === 0) {
+      console.warn("[followup] No valid questions extracted from model response");
+      return;
+    }
 
     const container = document.createElement("div");
     container.className = "follow-up-questions";
@@ -1451,8 +1486,8 @@ async function generateFollowUpQuestions(commentaryText, responseEl) {
 
     responseEl.appendChild(container);
     responseEl.scrollTop = responseEl.scrollHeight;
-  } catch {
-    // Silently fail — questions are optional
+  } catch (err) {
+    console.warn("[followup] Exception generating follow-up questions", err);
   }
 }
 
