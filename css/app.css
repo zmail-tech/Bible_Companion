@@ -1486,6 +1486,11 @@ header#app-header {
   color: #fff;
 }
 
+.settings-section-header.small-section {
+  background: var(--navy-muted, #5a6277);
+  color: var(--gold-light, #f0e6d3);
+}
+
 .settings-section-header svg {
   flex-shrink: 0;
 }
@@ -1511,6 +1516,11 @@ header#app-header {
 
 [data-theme="modern"] .settings-section-header.support-section {
   color: #fff;
+}
+
+[data-theme="modern"] .settings-section-header.small-section {
+  background: #3a3f4b;
+  color: #e0dcd4;
 }
 
 

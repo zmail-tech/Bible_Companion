@@ -17,7 +17,8 @@ const DEFAULT_SETTINGS = {
   emailGreeting: "",
   emailSubject: "Prayer List",
   commentaryModel: null,
-  prayerModel: null
+  prayerModel: null,
+  smallModel: null
 };
 
 let settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
@@ -163,6 +164,20 @@ export function setCommentaryModel(value) {
 
 export function setPrayerModel(value) {
   settings.prayerModel = value || null;
+  saveSettingsLocally();
+}
+
+export function getSmallModel() {
+  if (!settings.smallModel) return null;
+  const parts = settings.smallModel.split("::");
+  const providerId = parts[0];
+  const modelId = parts.slice(1).join("::");
+  const provider = getProviderById(providerId);
+  return provider ? { providerId, modelId, provider } : null;
+}
+
+export function setSmallModel(value) {
+  settings.smallModel = value || null;
   saveSettingsLocally();
 }
 
@@ -371,6 +386,16 @@ function populateModelDropdowns() {
     prayerSelect.appendChild(opt);
   }
   prayerSelect.value = settings.prayerModel || "";
+
+  const smallSelect = document.getElementById("small-model-select");
+  smallSelect.innerHTML = '<option value="">-- Select a model --</option>';
+  for (const m of aggregated) {
+    const opt = document.createElement("option");
+    opt.value = m.providerId + "::" + m.modelId;
+    opt.textContent = m.displayName;
+    smallSelect.appendChild(opt);
+  }
+  smallSelect.value = settings.smallModel || "";
 }
 
 function initSettingsModal() {
@@ -396,6 +421,7 @@ function initSettingsModal() {
   const contextEndpointEl = document.getElementById("settings-context-endpoint");
   const commentarySelect = document.getElementById("commentary-model-select");
   const prayerSelect = document.getElementById("prayer-model-select");
+  const smallSelect = document.getElementById("small-model-select");
   const refreshAllBtn = document.getElementById("refresh-all-models-btn");
 
   function renderSettingsSidebar() {
@@ -559,6 +585,11 @@ function initSettingsModal() {
 
   prayerSelect.addEventListener("change", () => {
     setPrayerModel(prayerSelect.value || null);
+    if (window.updateProviderStatus) window.updateProviderStatus();
+  });
+
+  smallSelect.addEventListener("change", () => {
+    setSmallModel(smallSelect.value || null);
     if (window.updateProviderStatus) window.updateProviderStatus();
   });
 
