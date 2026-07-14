@@ -18,7 +18,8 @@ const DEFAULT_SETTINGS = {
   emailSubject: "Prayer List",
   commentaryModel: null,
   prayerModel: null,
-  smallModel: null
+  smallModel: null,
+  commentaryVerbosity: "normal"
 };
 
 let settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
@@ -181,6 +182,15 @@ export function setSmallModel(value) {
   saveSettingsLocally();
 }
 
+export function getCommentaryVerbosity() {
+  return settings.commentaryVerbosity || "normal";
+}
+
+export function setCommentaryVerbosity(value) {
+  settings.commentaryVerbosity = value;
+  saveSettingsLocally();
+}
+
 export function buildAggregatedModelList() {
   const modelsStore = loadCachedModels();
   const result = [];
@@ -224,6 +234,9 @@ export function loadSettingsLocally() {
       }
       if (parsed.emailGreeting === undefined || parsed.emailGreeting === null) {
         parsed.emailGreeting = DEFAULT_SETTINGS.emailGreeting;
+      }
+      if (parsed.commentaryVerbosity === undefined || parsed.commentaryVerbosity === null) {
+        parsed.commentaryVerbosity = "normal";
       }
       return parsed;
     }

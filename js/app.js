@@ -20,7 +20,7 @@ Your purpose is to provide commentary on Bible passages.
 - **Accuracy:** Ensure responses are unbiased, positive, and accurate.`;
 
 import { loadBibleData, isLoaded, getBooks, getOldTestament, getNewTestament, getChaptersForBook, getChapter, getChapterItems, setCurrentBook, setCurrentChapter, getCurrentBook, getCurrentChapter, formatReference, goNextChapter, goPrevChapter } from "./bible.js";
-import { loadSettingsLocally, getActiveProvider, getCommentaryModel, getPrayerModel, getSmallModel, getPrayerSignature, getEmailSubject, getEmailGreeting, setCommentaryModel, buildAggregatedModelList, getSettings } from "./settings.js";
+import { loadSettingsLocally, getActiveProvider, getCommentaryModel, getPrayerModel, getSmallModel, getPrayerSignature, getEmailSubject, getEmailGreeting, setCommentaryModel, getCommentaryVerbosity, setCommentaryVerbosity, buildAggregatedModelList, getSettings } from "./settings.js";
 
 const INTENT_PROMPTS = {
   commentary: "Provide a detailed theological commentary on the selected passage. Use Southern Baptist theological perspectives and explain the text clearly.",
@@ -607,6 +607,15 @@ function initAiIntentBox() {
     });
     grid.appendChild(btn);
   }
+
+  const radios = document.querySelectorAll('.ai-verbosity-row input[name="verbosity"]');
+  const savedVerbosity = getCommentaryVerbosity();
+  radios.forEach(radio => {
+    radio.checked = radio.value === savedVerbosity;
+    radio.addEventListener("change", () => {
+      setCommentaryVerbosity(radio.value);
+    });
+  });
 }
 
 function setIntentButtonsLoading(loading) {
@@ -1198,6 +1207,17 @@ async function sendToAI(intentKey, followUpText) {
 
     tab.intent = intent;
 
+    const verbosity = getCommentaryVerbosity();
+    const verbosityMap = {
+      concise: "Response length: Keep your response brief and to the point. Aim for 2-4 short paragraphs maximum.",
+      normal: "Response length: Provide a balanced, moderately detailed response.",
+      elaborate: "Response length: Provide a thorough, in-depth response with extensive detail and analysis."
+    };
+    const tokensMap = { concise: 512, normal: 1024, elaborate: 2048 };
+    const verbosityDirective = verbosityMap[verbosity] || verbosityMap.normal;
+    const maxTokens = tokensMap[verbosity] || 1024;
+    const systemPrompt = `${SYSTEM_PROMPT}\n\n${verbosityDirective}`;
+
     if (followUpText) {
       tab.chatHistory.push({ role: "user", content: followUpText });
       const userMsg = document.createElement("div");
@@ -1208,14 +1228,14 @@ async function sendToAI(intentKey, followUpText) {
 
       const historyEntries = tab.chatHistory.slice(-20);
       const messages = [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         ...historyEntries.map(e => ({ role: e.role, content: e.content }))
       ];
 
       const requestBody = {
         model: commentaryConfig.modelId,
         messages,
-        max_tokens: 2048,
+        max_tokens: maxTokens,
         temperature: 0.7
       };
 
@@ -1237,10 +1257,10 @@ async function sendToAI(intentKey, followUpText) {
       const requestBody = {
         model: commentaryConfig.modelId,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           { role: "user", content: finalPrompt }
         ],
-        max_tokens: 2048,
+        max_tokens: maxTokens,
         temperature: 0.7
       };
 
@@ -1324,6 +1344,7 @@ async function streamAIResponse(provider, responseEl, statusEl, tab, requestBody
     const streamingEl = document.createElement("div");
     streamingEl.className = "ai-assistant-message streaming-response";
     streamingEl.innerHTML = `<span class="loading-spinner"></span>`;
+    responseEl.innerHTML = "";
     responseEl.appendChild(streamingEl);
 
     statusEl.textContent = "Streaming...";
