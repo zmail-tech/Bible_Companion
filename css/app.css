@@ -403,6 +403,7 @@ header#app-header {
 #mode-tabs {
   display: flex;
   align-items: stretch;
+  justify-content: center;
   background: var(--parchment);
   border-bottom: 2px solid var(--border-dark);
   flex-shrink: 0;
