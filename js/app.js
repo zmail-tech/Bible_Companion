@@ -906,6 +906,56 @@ function renderChapter() {
   disclaimer.textContent = "Note: LLMs can and do make mistakes. Always verify important information against the Bible text itself.";
   container.appendChild(disclaimer);
 
+  const bottomNav = document.createElement("div");
+  bottomNav.id = "chapter-bottom-nav";
+  bottomNav.innerHTML = `
+    <button id="bottom-prev-chapter" class="bottom-nav-arrow" aria-label="Previous chapter">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+    <span id="bottom-chapter-display">${tab.chapter}</span>
+    <button id="bottom-next-chapter" class="bottom-nav-arrow" aria-label="Next chapter">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    </button>
+    <span id="bottom-book-label">${escapeHtml(tab.book)}</span>
+  `;
+  container.appendChild(bottomNav);
+
+  bottomNav.querySelector("#bottom-prev-chapter").addEventListener("click", () => {
+    const tab = getActiveTab();
+    if (!tab) return;
+    const result = goPrevChapter(tab.book, tab.chapter);
+    tab.book = result.book;
+    tab.chapter = result.chapter;
+    setCurrentBook(tab.book);
+    setCurrentChapter(tab.chapter);
+    updateBookTrigger();
+    updateChapterSelect();
+    document.getElementById("chapter-select").value = tab.chapter;
+    renderChapter();
+    saveTabsToStorage();
+    renderTabBar();
+  });
+
+  bottomNav.querySelector("#bottom-next-chapter").addEventListener("click", () => {
+    const tab = getActiveTab();
+    if (!tab) return;
+    const result = goNextChapter(tab.book, tab.chapter);
+    tab.book = result.book;
+    tab.chapter = result.chapter;
+    setCurrentBook(tab.book);
+    setCurrentChapter(tab.chapter);
+    updateBookTrigger();
+    updateChapterSelect();
+    document.getElementById("chapter-select").value = tab.chapter;
+    renderChapter();
+    saveTabsToStorage();
+    renderTabBar();
+  });
+
   setupVerseSelection(textBlock);
   setupStrongTooltips(textBlock);
 }
