@@ -938,6 +938,8 @@ function renderChapter() {
     renderChapter();
     saveTabsToStorage();
     renderTabBar();
+    const verseContainer = document.getElementById("verse-container");
+    if (verseContainer) verseContainer.scrollTop = 0;
   });
 
   bottomNav.querySelector("#bottom-next-chapter").addEventListener("click", () => {
@@ -954,6 +956,8 @@ function renderChapter() {
     renderChapter();
     saveTabsToStorage();
     renderTabBar();
+    const verseContainer = document.getElementById("verse-container");
+    if (verseContainer) verseContainer.scrollTop = 0;
   });
 
   setupVerseSelection(textBlock);
