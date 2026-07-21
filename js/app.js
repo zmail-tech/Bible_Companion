@@ -42,6 +42,15 @@ let activeTabId = null;
 let nextTabId = 1;
 let isLoading = false;
 let isPrayerMode = false;
+let isReviewMode = false;
+
+/* --- Review Mode State --- */
+
+let reviewPassages = [];
+let quizQuestions = [];
+let currentQuestionIndex = 0;
+let quizAnswers = {};
+let quizScore = { correct: 0, total: 0 };
 
 let prayerTabs = [];
 let activePrayerTabId = null;
@@ -1213,9 +1222,8 @@ async function sendToAI(intentKey, followUpText) {
       normal: "Response length: Provide a balanced, moderately detailed response.",
       elaborate: "Response length: Provide a thorough, in-depth response with extensive detail and analysis."
     };
-    const tokensMap = { concise: 512, normal: 1024, elaborate: 2048 };
     const verbosityDirective = verbosityMap[verbosity] || verbosityMap.normal;
-    const maxTokens = tokensMap[verbosity] || 1024;
+    const maxTokens = 4096;
     const systemPrompt = `${SYSTEM_PROMPT}\n\n${verbosityDirective}`;
 
     if (followUpText) {
@@ -1242,7 +1250,9 @@ async function sendToAI(intentKey, followUpText) {
       console.log("[ai] AI follow-up request", {
         provider: provider.name,
         model: commentaryConfig.modelId,
-        messageCount: requestBody.messages.length
+        messageCount: requestBody.messages.length,
+        maxTokens: requestBody.max_tokens,
+        verbosity
       });
 
       await streamAIResponse(provider, responseEl, statusEl, tab, requestBody);
@@ -1267,7 +1277,9 @@ async function sendToAI(intentKey, followUpText) {
       console.log("[ai] AI request body", {
         provider: provider.name,
         model: commentaryConfig.modelId,
-        messageCount: requestBody.messages.length
+        messageCount: requestBody.messages.length,
+        maxTokens: requestBody.max_tokens,
+        verbosity
       });
 
       await streamAIResponse(provider, responseEl, statusEl, tab, requestBody);
@@ -1339,6 +1351,7 @@ async function streamAIResponse(provider, responseEl, statusEl, tab, requestBody
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
+    let reasoningBuffer = "";
     let buffer = "";
 
     const streamingEl = document.createElement("div");
@@ -1384,6 +1397,17 @@ async function streamAIResponse(provider, responseEl, statusEl, tab, requestBody
 
           try {
             const json = JSON.parse(dataStr);
+
+            // Collect reasoning_content separately if model uses a reasoning model
+            const reasoningContent =
+              json.choices?.[0]?.delta?.reasoning_content ||
+              json.choices?.[0]?.delta?.reasoning ||
+              json.choices?.[0]?.delta?.reason ||
+              "";
+            if (reasoningContent) {
+              reasoningBuffer += reasoningContent;
+            }
+
             const delta =
               json.choices?.[0]?.delta?.content ||
               json.choices?.[0]?.delta?.text ||
@@ -1408,9 +1432,19 @@ async function streamAIResponse(provider, responseEl, statusEl, tab, requestBody
         resetStreamIdleTimer();
       }
 
+      // Strip thinking tags from content
+      let finalText = "";
       if (fullText) {
-        const cleanText = stripThinkingTags(fullText);
-        streamingEl.innerHTML = renderMarkdown(cleanText);
+        finalText = stripThinkingTags(fullText);
+      }
+
+      // If regular content is empty but model produced reasoning, use reasoning as fallback
+      if (!finalText && reasoningBuffer) {
+        finalText = stripThinkingTags(reasoningBuffer);
+      }
+
+      if (finalText) {
+        streamingEl.innerHTML = renderMarkdown(finalText);
         responseEl.scrollTop = responseEl.scrollHeight;
       }
 
@@ -1419,9 +1453,16 @@ async function streamAIResponse(provider, responseEl, statusEl, tab, requestBody
       if (streamIdleTimer) clearTimeout(streamIdleTimer);
 
       if (streamErr.name === "AbortError") {
+        let abortFinalText = "";
         if (fullText) {
-          const cleanText = stripThinkingTags(fullText);
-          streamingEl.innerHTML = renderMarkdown(cleanText);
+          abortFinalText = stripThinkingTags(fullText);
+        }
+        // Fallback to reasoning content if regular content is empty
+        if (!abortFinalText && reasoningBuffer) {
+          abortFinalText = stripThinkingTags(reasoningBuffer);
+        }
+        if (abortFinalText) {
+          streamingEl.innerHTML = renderMarkdown(abortFinalText);
           tab.aiStatus = activeAbortReason === "Stream stalled for 30s"
             ? "Streaming interrupted: no stream data for 30s. Partial result shown."
             : "Streaming interrupted: request timed out after 120s. Partial result shown.";
@@ -1442,12 +1483,28 @@ async function streamAIResponse(provider, responseEl, statusEl, tab, requestBody
       return;
     }
 
-    if (!fullText) {
-      responseEl.innerHTML = '<p class="selection-hint">Received empty response from API.</p>';
+    // Recompute finalText for post-stream checks (may have been set in catch block)
+    let postStreamText = "";
+    if (fullText) {
+      postStreamText = stripThinkingTags(fullText);
+    }
+    if (!postStreamText && reasoningBuffer) {
+      postStreamText = stripThinkingTags(reasoningBuffer);
     }
 
-    if (fullText) {
-      tab.chatHistory.push({ role: "assistant", content: stripThinkingTags(fullText) });
+    if (!postStreamText) {
+      console.warn("[ai] empty response after streaming", {
+        streamedChunks,
+        fullTextLength: fullText.length,
+        reasoningBufferLength: reasoningBuffer.length,
+        model: requestBody.model,
+        endpoint: provider.endpoint
+      });
+      responseEl.innerHTML = '<p class="selection-hint">Received empty response from API. Check console for details.</p>';
+    }
+
+    if (postStreamText) {
+      tab.chatHistory.push({ role: "assistant", content: postStreamText });
       if (tab.chatHistory.length > 20) {
         tab.chatHistory = tab.chatHistory.slice(-20);
       }
@@ -1787,27 +1844,42 @@ function registerServiceWorker() {
 function switchMode(mode) {
   const wasPrayerMode = isPrayerMode;
   isPrayerMode = mode === "prayer";
+  isReviewMode = mode === "review";
   const bibleReader = document.getElementById("bible-reader");
   const splitter = document.getElementById("splitter");
   const navigationBar = document.getElementById("navigation-bar");
   const aiPanel = document.getElementById("ai-panel");
   const aiIntentBox = document.getElementById("ai-intent-box");
   const prayerEditor = document.getElementById("prayer-editor");
+  const reviewPanel = document.getElementById("review-panel");
   const bibleTab = document.getElementById("mode-bible-tab");
   const prayerTab = document.getElementById("mode-prayer-tab");
+  const reviewTab = document.getElementById("mode-review-tab");
 
   bibleTab.classList.toggle("active", mode === "bible");
   prayerTab.classList.toggle("active", mode === "prayer");
+  if (reviewTab) reviewTab.classList.toggle("active", mode === "review");
 
   const tabBar = document.getElementById("tab-bar");
 
-  if (isPrayerMode) {
+  if (isReviewMode) {
+    bibleReader.classList.add("hidden");
+    splitter.classList.add("hidden");
+    navigationBar.classList.add("hidden");
+    aiPanel.classList.add("hidden");
+    if (aiIntentBox) aiIntentBox.classList.add("hidden");
+    prayerEditor.classList.add("hidden");
+    if (reviewPanel) reviewPanel.classList.remove("hidden");
+    tabBar.classList.add("hidden");
+    renderReviewSetup();
+  } else if (isPrayerMode) {
     bibleReader.classList.add("hidden");
     splitter.classList.add("hidden");
     navigationBar.classList.add("hidden");
     aiPanel.classList.add("hidden");
     if (aiIntentBox) aiIntentBox.classList.add("hidden");
     prayerEditor.classList.remove("hidden");
+    if (reviewPanel) reviewPanel.classList.add("hidden");
     tabBar.classList.remove("hidden");
     renderTabBar();
     restorePrayerText();
@@ -1818,6 +1890,7 @@ function switchMode(mode) {
     aiPanel.classList.remove("hidden");
     if (aiIntentBox) aiIntentBox.classList.remove("hidden");
     prayerEditor.classList.add("hidden");
+    if (reviewPanel) reviewPanel.classList.add("hidden");
     tabBar.classList.remove("hidden");
     renderTabBar();
   }
@@ -2280,6 +2353,605 @@ function sendPrayerEmail() {
   showPrayerStatus("Prayer list copied to clipboard. Opening email client...");
 }
 
+/* --- Review Mode --- */
+
+function parseVerseRange(rangeStr) {
+  const parts = rangeStr.split(",");
+  const verses = new Set();
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.includes("-")) {
+      const [startStr, endStr] = trimmed.split("-");
+      const start = parseInt(startStr, 10);
+      const end = parseInt(endStr, 10);
+      if (!isNaN(start) && !isNaN(end) && start > 0 && end >= start) {
+        for (let v = start; v <= end; v++) {
+          verses.add(v);
+        }
+      }
+    } else {
+      const num = parseInt(trimmed, 10);
+      if (!isNaN(num) && num > 0) {
+        verses.add(num);
+      }
+    }
+  }
+  return Array.from(verses).sort((a, b) => a - b);
+}
+
+function renderReviewSetup() {
+  const setupEl = document.getElementById("review-setup");
+  const quizEl = document.getElementById("review-quiz");
+  if (!setupEl || !quizEl) return;
+
+  if (quizQuestions.length > 0 && currentQuestionIndex < quizQuestions.length) {
+    setupEl.style.display = "none";
+    quizEl.style.display = "block";
+    renderQuiz();
+    return;
+  }
+
+  setupEl.style.display = "block";
+  quizEl.style.display = "none";
+
+  renderPassageSlots();
+  updateGenerateButtonState();
+}
+
+function renderPassageSlots() {
+  const container = document.getElementById("passage-slots");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (reviewPassages.length === 0) {
+    reviewPassages.push({ book: "", chapter: "", verses: "" });
+  }
+
+  reviewPassages.forEach((passage, index) => {
+    const slot = createPassageSlot(passage, index);
+    container.appendChild(slot);
+  });
+}
+
+function createPassageSlot(passage, index) {
+  const slot = document.createElement("div");
+  slot.className = "passage-entry";
+
+  const bookSelect = document.createElement("select");
+  bookSelect.className = "passage-book-select";
+  bookSelect.innerHTML = '<option value="">Book</option>';
+  for (const book of getBooks()) {
+    const opt = document.createElement("option");
+    opt.value = book;
+    opt.textContent = book;
+    if (passage.book === book) opt.selected = true;
+    bookSelect.appendChild(opt);
+  }
+  bookSelect.addEventListener("change", () => {
+    reviewPassages[index].book = bookSelect.value;
+    reviewPassages[index].chapter = "";
+    reviewPassages[index].verses = "";
+    updateChapterOptions(bookSelect, chapterSelect);
+    updateVerseHint(verseInput);
+    updateGenerateButtonState();
+  });
+
+  const chapterSelect = document.createElement("select");
+  chapterSelect.className = "passage-chapter-select";
+  chapterSelect.innerHTML = '<option value="">Chapter</option>';
+  if (passage.book) {
+    const maxCh = getChaptersForBook(passage.book);
+    for (let c = 1; c <= maxCh; c++) {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      if (passage.chapter === String(c)) opt.selected = true;
+      chapterSelect.appendChild(opt);
+    }
+  }
+  chapterSelect.addEventListener("change", () => {
+    reviewPassages[index].chapter = chapterSelect.value;
+    updateVerseHint(verseInput);
+    updateGenerateButtonState();
+  });
+
+  const verseInput = document.createElement("input");
+  verseInput.type = "text";
+  verseInput.className = "passage-verse-input";
+  verseInput.placeholder = "Verses (e.g. 1-5, 3,7)";
+  verseInput.value = passage.verses || "";
+  verseInput.addEventListener("input", () => {
+    reviewPassages[index].verses = verseInput.value;
+    updateGenerateButtonState();
+  });
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "btn-secondary passage-remove-btn";
+  removeBtn.textContent = "Remove";
+  removeBtn.addEventListener("click", () => {
+    reviewPassages.splice(index, 1);
+    if (reviewPassages.length === 0) {
+      reviewPassages.push({ book: "", chapter: "", verses: "" });
+    }
+    renderPassageSlots();
+    updateGenerateButtonState();
+  });
+
+  slot.appendChild(bookSelect);
+  slot.appendChild(chapterSelect);
+  slot.appendChild(verseInput);
+  slot.appendChild(removeBtn);
+
+  updateVerseHint(verseInput);
+
+  return slot;
+}
+
+function updateChapterOptions(bookSelect, chapterSelect) {
+  chapterSelect.innerHTML = '<option value="">Chapter</option>';
+  const book = bookSelect.value;
+  if (!book) return;
+  const maxCh = getChaptersForBook(book);
+  for (let c = 1; c <= maxCh; c++) {
+    const opt = document.createElement("option");
+    opt.value = c;
+    opt.textContent = c;
+    chapterSelect.appendChild(opt);
+  }
+}
+
+function updateVerseHint(verseInput) {
+  const slot = verseInput.parentElement;
+  const bookSelect = slot.querySelector(".passage-book-select");
+  const chapterSelect = slot.querySelector(".passage-chapter-select");
+  const book = bookSelect.value;
+  const chapter = chapterSelect.value;
+  let hint = "Verses (e.g. 1-5, 3,7)";
+  if (book && chapter) {
+    const verses = getChapter(book, parseInt(chapter, 10));
+    if (verses && verses.length > 0) {
+      hint = `Verses (1-${verses.length}, e.g. 1-5, 3,7)`;
+    }
+  }
+  verseInput.placeholder = hint;
+}
+
+function updateGenerateButtonState() {
+  const btn = document.getElementById("generate-quiz-btn");
+  if (!btn) return;
+  const valid = reviewPassages.some(p => p.book && p.chapter && p.verses);
+  btn.disabled = !valid;
+}
+
+function validatePassages() {
+  const errorEl = document.getElementById("review-error");
+  if (errorEl) errorEl.style.display = "none";
+
+  const validated = [];
+  for (const p of reviewPassages) {
+    if (!p.book || !p.chapter || !p.verses) continue;
+    const chapterNum = parseInt(p.chapter, 10);
+    const verses = parseVerseRange(p.verses);
+    if (verses.length === 0) {
+      showReviewError(`Invalid verse range "${p.verses}" for ${p.book} ${p.chapter}.`);
+      return null;
+    }
+    const chapterVerses = getChapter(p.book, chapterNum);
+    if (!chapterVerses) {
+      showReviewError(`Could not load ${p.book} chapter ${chapterNum}.`);
+      return null;
+    }
+    const maxVerse = chapterVerses.length;
+    const clamped = verses.filter(v => v <= maxVerse).slice(0, 100);
+    if (clamped.length === 0) {
+      showReviewError(`No valid verses in range "${p.verses}" for ${p.book} ${p.chapter} (max verse: ${maxVerse}).`);
+      return null;
+    }
+    validated.push({ book: p.book, chapter: chapterNum, verses: clamped });
+  }
+
+  if (validated.length === 0) {
+    showReviewError("Please select at least one valid passage.");
+    return null;
+  }
+  return validated;
+}
+
+function showReviewError(msg) {
+  const errorEl = document.getElementById("review-error");
+  if (errorEl) {
+    errorEl.textContent = msg;
+    errorEl.style.display = "block";
+  }
+}
+
+function buildPassageText(validated) {
+  const parts = [];
+  for (const p of validated) {
+    const verses = getChapter(p.book, p.chapter);
+    if (!verses) continue;
+    const verseMap = {};
+    for (const v of verses) {
+      verseMap[v.number] = v.text;
+    }
+    const ref = formatReference(p.book, p.chapter, "");
+    parts.push(`=== ${ref} ===`);
+    for (const vNum of p.verses) {
+      const text = verseMap[vNum];
+      if (text) {
+        parts.push(`Verse ${vNum}: ${text}`);
+      }
+    }
+    parts.push("");
+  }
+  return parts.join("\n");
+}
+
+async function generateQuiz() {
+  const validated = validatePassages();
+  if (!validated) return;
+
+  const passageText = buildPassageText(validated);
+  const smallConfig = getSmallModel();
+  if (!smallConfig) {
+    showReviewError("Small model not configured. Please set a Small Model in Settings.");
+    return;
+  }
+
+  const provider = smallConfig.provider;
+  const headers = { "Content-Type": "application/json" };
+  if (provider.apiKey) {
+    headers["Authorization"] = `Bearer ${provider.apiKey}`;
+  }
+
+  const prompt = `Generate up to 20 quiz questions based on these Bible passages. Include a mix of fill-in-the-blank, short answer, and identification questions. Format each question on its own line prefixed with "Q: " followed by the correct answer prefixed with "A: " on the next line. Do not include any extra text, numbering, or explanation.
+
+PASSAGES:
+${passageText}`;
+
+  const generateBtn = document.getElementById("generate-quiz-btn");
+  if (generateBtn) {
+    generateBtn.disabled = true;
+    generateBtn.textContent = "Generating...";
+  }
+
+  try {
+    const res = await fetch(provider.endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: smallConfig.modelId,
+        messages: [
+          { role: "system", content: "You are a Bible quiz generator. Output questions in Q:/A: format only." },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: 4096,
+        temperature: 0.5
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    let content = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || "";
+    content = stripThinkingTags(content);
+
+    const parsed = parseQuizResponse(content);
+
+    if (parsed.length < 3) {
+      if (parsed.length > 0) {
+        if (!confirm(`Only ${parsed.length} questions generated. Continue anyway?`)) {
+          return;
+        }
+      } else {
+        showReviewError("Failed to generate quiz questions. Please try again.");
+        return;
+      }
+    }
+
+    quizQuestions = parsed;
+    currentQuestionIndex = 0;
+    quizAnswers = {};
+    quizScore = { correct: 0, total: 0 };
+    saveReviewState();
+    renderQuiz();
+  } catch (err) {
+    showReviewError(`Quiz generation failed: ${err.message}`);
+  } finally {
+    if (generateBtn) {
+      generateBtn.disabled = false;
+      generateBtn.textContent = "Generate Quiz";
+    }
+  }
+}
+
+function parseQuizResponse(content) {
+  const questions = [];
+  const lines = content.split("\n");
+  let currentQuestion = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("Q:") || trimmed.startsWith("Q: ")) {
+      if (currentQuestion && currentQuestion.question && currentQuestion.answer) {
+        questions.push(currentQuestion);
+      }
+      currentQuestion = {
+        question: trimmed.replace(/^Q:\s*/, ""),
+        answer: ""
+      };
+    } else if (trimmed.startsWith("A:") || trimmed.startsWith("A: ")) {
+      if (currentQuestion) {
+        currentQuestion.answer = trimmed.replace(/^A:\s*/, "");
+      }
+    } else if (currentQuestion && !currentQuestion.answer) {
+      currentQuestion.question += " " + trimmed;
+    } else if (currentQuestion && currentQuestion.answer) {
+      currentQuestion.answer += " " + trimmed;
+    }
+  }
+
+  if (currentQuestion && currentQuestion.question && currentQuestion.answer) {
+    questions.push(currentQuestion);
+  }
+
+  return questions.filter(q => q.question && q.answer);
+}
+
+function renderQuiz() {
+  const setupEl = document.getElementById("review-setup");
+  const quizEl = document.getElementById("review-quiz");
+  if (!setupEl || !quizEl) return;
+
+  setupEl.style.display = "none";
+  quizEl.style.display = "block";
+
+  const progressEl = document.getElementById("quiz-progress");
+  if (progressEl) {
+    progressEl.textContent = `Question ${currentQuestionIndex + 1} of ${quizQuestions.length}`;
+  }
+
+  const questionEl = document.getElementById("quiz-question");
+  if (questionEl) {
+    questionEl.textContent = quizQuestions[currentQuestionIndex].question;
+  }
+
+  const answerInput = document.getElementById("quiz-answer-input");
+  if (answerInput) {
+    answerInput.value = "";
+    answerInput.disabled = false;
+    answerInput.style.display = "block";
+  }
+
+  const resultEl = document.getElementById("quiz-result");
+  if (resultEl) resultEl.style.display = "none";
+
+  const submitBtn = document.getElementById("quiz-submit-btn");
+  if (submitBtn) {
+    submitBtn.style.display = "inline-block";
+    submitBtn.disabled = false;
+  }
+
+  const nextBtn = document.getElementById("quiz-next-btn");
+  if (nextBtn) nextBtn.style.display = "none";
+
+  const restartBtn = document.getElementById("quiz-restart-btn");
+  if (restartBtn) restartBtn.style.display = "none";
+
+  const scoreSummary = document.getElementById("quiz-score-summary");
+  if (scoreSummary) scoreSummary.style.display = "none";
+
+  if (answerInput) answerInput.focus();
+}
+
+function submitQuizAnswer() {
+  const answerInput = document.getElementById("quiz-answer-input");
+  const resultEl = document.getElementById("quiz-result");
+  const submitBtn = document.getElementById("quiz-submit-btn");
+  const nextBtn = document.getElementById("quiz-next-btn");
+
+  if (!answerInput) return;
+
+  const userAnswer = answerInput.value.trim();
+  if (!userAnswer) return;
+
+  quizAnswers[currentQuestionIndex] = userAnswer;
+
+  const correct = checkAnswer(userAnswer, quizQuestions[currentQuestionIndex].answer);
+  if (correct) {
+    quizScore.correct++;
+  }
+  quizScore.total++;
+
+  answerInput.disabled = true;
+
+  if (resultEl) {
+    resultEl.style.display = "block";
+    resultEl.className = `quiz-result ${correct ? "correct" : "incorrect"}`;
+    resultEl.innerHTML = `<div class="result-status">${correct ? "Correct!" : "Incorrect"}</div>
+      <div class="result-answer">Answer: ${escapeHtml(quizQuestions[currentQuestionIndex].answer)}</div>
+      ${!correct ? `<div class="result-user">Your answer: ${escapeHtml(userAnswer)}</div>` : ""}`;
+  }
+
+  if (submitBtn) submitBtn.style.display = "none";
+  if (nextBtn) nextBtn.style.display = "inline-block";
+
+  saveReviewState();
+}
+
+function nextQuizQuestion() {
+  currentQuestionIndex++;
+
+  if (currentQuestionIndex >= quizQuestions.length) {
+    showScoreSummary();
+  } else {
+    renderQuiz();
+  }
+}
+
+function showScoreSummary() {
+  const progressEl = document.getElementById("quiz-progress");
+  const questionEl = document.getElementById("quiz-question");
+  const answerInput = document.getElementById("quiz-answer-input");
+  const resultEl = document.getElementById("quiz-result");
+  const submitBtn = document.getElementById("quiz-submit-btn");
+  const nextBtn = document.getElementById("quiz-next-btn");
+  const restartBtn = document.getElementById("quiz-restart-btn");
+  const scoreSummary = document.getElementById("quiz-score-summary");
+
+  if (progressEl) progressEl.textContent = "Quiz Complete";
+  if (questionEl) questionEl.textContent = "";
+  if (answerInput) answerInput.style.display = "none";
+  if (resultEl) resultEl.style.display = "none";
+  if (submitBtn) submitBtn.style.display = "none";
+  if (nextBtn) nextBtn.style.display = "none";
+  if (restartBtn) restartBtn.style.display = "inline-block";
+
+  if (scoreSummary) {
+    const pct = quizScore.total > 0 ? Math.round((quizScore.correct / quizScore.total) * 100) : 0;
+    scoreSummary.style.display = "block";
+    scoreSummary.innerHTML = `<h3>Quiz Results</h3>
+      <p class="score-number">${quizScore.correct} / ${quizScore.total} (${pct}%)</p>
+      <div class="score-details">
+        ${quizQuestions.map((q, i) => {
+          const wasCorrect = quizAnswers[i] && checkAnswer(quizAnswers[i], q.answer);
+          return `<div class="score-item ${wasCorrect ? "correct" : "incorrect"}">
+            <span class="score-icon">${wasCorrect ? "\u2713" : "\u2717"}</span>
+            <span class="score-q">${escapeHtml(q.question)}</span>
+          </div>`;
+        }).join("")}
+      </div>`;
+  }
+
+  saveReviewState();
+}
+
+function resetQuiz() {
+  reviewPassages = [];
+  quizQuestions = [];
+  currentQuestionIndex = 0;
+  quizAnswers = {};
+  quizScore = { correct: 0, total: 0 };
+  clearReviewState();
+  renderReviewSetup();
+}
+
+function checkAnswer(userAnswer, correctAnswer) {
+  const normalize = (s) => s.toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
+  const user = normalize(userAnswer);
+  const correct = normalize(correctAnswer);
+
+  if (user === correct) return true;
+
+  const correctWords = correct.split(" ").filter(w => w.length > 2);
+  if (correctWords.length === 0) return user.length > 0;
+
+  const matchCount = correctWords.filter(w => user.includes(w)).length;
+  return matchCount >= Math.ceil(correctWords.length * 0.6);
+}
+
+/* --- Review Mode Persistence --- */
+
+function saveReviewState() {
+  try {
+    const state = {
+      passages: reviewPassages,
+      questions: quizQuestions,
+      currentIndex: currentQuestionIndex,
+      answers: quizAnswers,
+      score: quizScore
+    };
+    localStorage.setItem("bibleCompanion_reviewState", JSON.stringify(state));
+  } catch (e) {
+    console.warn("Failed to save review state:", e);
+  }
+}
+
+function loadReviewState() {
+  try {
+    const raw = localStorage.getItem("bibleCompanion_reviewState");
+    if (!raw) return false;
+    const state = JSON.parse(raw);
+    reviewPassages = state.passages || [];
+    quizQuestions = state.questions || [];
+    currentQuestionIndex = state.currentIndex || 0;
+    quizAnswers = state.answers || {};
+    quizScore = state.score || { correct: 0, total: 0 };
+    return quizQuestions.length > 0;
+  } catch (e) {
+    console.warn("Failed to load review state:", e);
+    return false;
+  }
+}
+
+function clearReviewState() {
+  try {
+    localStorage.removeItem("bibleCompanion_reviewState");
+  } catch (e) {
+    // ignore
+  }
+}
+
+/* --- Review Mode --- */
+
+function initReviewMode() {
+  const addPassageBtn = document.getElementById("add-passage-btn");
+  const generateQuizBtn = document.getElementById("generate-quiz-btn");
+  const submitBtn = document.getElementById("quiz-submit-btn");
+  const nextBtn = document.getElementById("quiz-next-btn");
+  const restartBtn = document.getElementById("quiz-restart-btn");
+  const answerInput = document.getElementById("quiz-answer-input");
+
+  if (addPassageBtn) {
+    addPassageBtn.addEventListener("click", () => {
+      if (reviewPassages.length < 10) {
+        reviewPassages.push({ book: "", chapter: "", verses: "" });
+        renderPassageSlots();
+        updateGenerateButtonState();
+      }
+    });
+  }
+
+  if (generateQuizBtn) {
+    generateQuizBtn.addEventListener("click", generateQuiz);
+  }
+
+  if (submitBtn) {
+    submitBtn.addEventListener("click", submitQuizAnswer);
+  }
+
+  if (nextBtn) {
+    nextBtn.addEventListener("click", nextQuizQuestion);
+  }
+
+  if (restartBtn) {
+    restartBtn.addEventListener("click", resetQuiz);
+  }
+
+  if (answerInput) {
+    answerInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const submitBtnEl = document.getElementById("quiz-submit-btn");
+        const nextBtnEl = document.getElementById("quiz-next-btn");
+        if (submitBtnEl && submitBtnEl.style.display !== "none") {
+          submitQuizAnswer();
+        } else if (nextBtnEl && nextBtnEl.style.display !== "none") {
+          nextQuizQuestion();
+        }
+      }
+    });
+  }
+
+  const hasActiveQuiz = loadReviewState();
+  if (hasActiveQuiz) {
+    // Quiz was in progress, will restore when user switches to review mode
+  }
+}
+
 function initPrayerMode() {
   const bibleTab = document.getElementById("mode-bible-tab");
   const prayerTab = document.getElementById("mode-prayer-tab");
@@ -2292,6 +2964,9 @@ function initPrayerMode() {
 
   bibleTab.addEventListener("click", () => switchMode("bible"));
   prayerTab.addEventListener("click", () => switchMode("prayer"));
+  const reviewTab = document.getElementById("mode-review-tab");
+  if (reviewTab) reviewTab.addEventListener("click", () => switchMode("review"));
+  initReviewMode();
   prayerCopyBtn.addEventListener("click", copyPrayerToClipboard);
   prayerSaveBtn.addEventListener("click", savePrayerText);
   if (prayerSendEmailBtn) prayerSendEmailBtn.addEventListener("click", sendPrayerEmail);

@@ -3019,3 +3019,329 @@ header#app-header {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* --- Review Mode --- */
+
+.review-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 200px;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--bible-bg);
+  padding: 1.5rem;
+}
+
+.review-setup {
+  max-width: 700px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.review-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.review-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+}
+
+.passage-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.passage-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--parchment);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+}
+
+.passage-book-select,
+.passage-chapter-select,
+.passage-verse-input {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  background: var(--bible-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+}
+
+.passage-book-select {
+  flex: 2;
+  min-width: 0;
+}
+
+.passage-chapter-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.passage-verse-input {
+  flex: 1.5;
+  min-width: 0;
+}
+
+.passage-remove-btn {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.review-setup-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.review-error {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(178, 34, 34, 0.1);
+  border: 1px solid var(--error);
+  border-radius: 4px;
+  color: var(--error);
+  font-size: 0.85rem;
+}
+
+/* Quiz UI */
+
+.review-quiz {
+  max-width: 700px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.quiz-progress {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.quiz-card {
+  padding: 1.5rem;
+  background: var(--parchment);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.quiz-question {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.quiz-answer-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  font-family: "Times New Roman", Times, Georgia, serif;
+  background: var(--bible-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  resize: vertical;
+  outline: none;
+  margin-bottom: 0.75rem;
+}
+
+.quiz-answer-input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold-light);
+}
+
+.quiz-result {
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.quiz-result.correct {
+  background: rgba(45, 107, 48, 0.1);
+  border: 1px solid var(--success);
+  color: var(--success);
+}
+
+.quiz-result.incorrect {
+  background: rgba(178, 34, 34, 0.1);
+  border: 1px solid var(--error);
+  color: var(--error);
+}
+
+.result-status {
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.result-answer {
+  margin-top: 0.25rem;
+}
+
+.result-user {
+  margin-top: 0.25rem;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.quiz-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+/* Score Summary */
+
+.score-summary {
+  padding: 1.5rem;
+  background: var(--parchment);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  text-align: center;
+}
+
+.score-summary h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.score-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 1rem;
+}
+
+.score-details {
+  text-align: left;
+  margin-top: 1rem;
+}
+
+.score-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  margin-bottom: 0.25rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.score-item.correct {
+  background: rgba(45, 107, 48, 0.08);
+}
+
+.score-item.incorrect {
+  background: rgba(178, 34, 34, 0.08);
+}
+
+.score-icon {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.score-item.correct .score-icon {
+  color: var(--success);
+}
+
+.score-item.incorrect .score-icon {
+  color: var(--error);
+}
+
+.score-q {
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+/* Review mode - Dark theme overrides */
+
+[data-theme="dark"] .review-panel {
+  background: var(--bible-bg);
+}
+
+[data-theme="dark"] .passage-entry {
+  background: var(--parchment-dark);
+}
+
+[data-theme="dark"] .quiz-card {
+  background: var(--parchment-dark);
+}
+
+[data-theme="dark"] .score-summary {
+  background: var(--parchment-dark);
+}
+
+/* Review mode - Modern theme overrides */
+
+[data-theme="modern"] .review-panel {
+  background: var(--bible-bg);
+}
+
+[data-theme="modern"] .passage-entry {
+  background: var(--parchment-dark);
+}
+
+[data-theme="modern"] .quiz-card {
+  background: var(--parchment-dark);
+}
+
+[data-theme="modern"] .score-summary {
+  background: var(--parchment-dark);
+}
+
+/* Review mode - Responsive */
+
+@media (max-width: 600px) {
+  .review-panel {
+    padding: 1rem;
+  }
+
+  .passage-entry {
+    flex-wrap: wrap;
+  }
+
+  .passage-book-select {
+    flex: 1 1 100%;
+  }
+
+  .passage-chapter-select,
+  .passage-verse-input {
+    flex: 1;
+  }
+
+  .review-setup-actions {
+    flex-direction: column;
+  }
+
+  .review-setup-actions button {
+    width: 100%;
+  }
+
+  .quiz-card {
+    padding: 1rem;
+  }
+
+  .score-number {
+    font-size: 1.5rem;
+  }
+}

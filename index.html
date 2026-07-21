@@ -41,6 +41,12 @@
           </svg>
           <span>Prayer</span>
         </button>
+        <button id="mode-review-tab" class="mode-tab" aria-label="Review Mode">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
+          <span>Review</span>
+        </button>
       </div>
       <div id="tab-bar"></div>
       <div id="split-container">
@@ -136,6 +142,33 @@
               </svg>
               Send Email
             </button>
+          </div>
+        </section>
+
+        <section id="review-panel" class="review-panel hidden">
+          <div id="review-setup" class="review-setup">
+            <h2 class="review-title">Review — Quiz from Bible Passages</h2>
+            <p class="review-subtitle">Select one or more passages, then generate an AI-powered quiz.</p>
+            <div id="passage-slots" class="passage-slots"></div>
+            <div class="review-setup-actions">
+              <button id="add-passage-btn" class="btn-secondary">+ Add Passage</button>
+              <button id="generate-quiz-btn" class="btn-primary" disabled>Generate Quiz</button>
+            </div>
+            <div id="review-error" class="review-error" style="display:none;"></div>
+          </div>
+          <div id="review-quiz" class="review-quiz" style="display:none;">
+            <div id="quiz-progress" class="quiz-progress"></div>
+            <div id="quiz-card" class="quiz-card">
+              <div id="quiz-question" class="quiz-question"></div>
+              <textarea id="quiz-answer-input" class="quiz-answer-input" placeholder="Type your answer..." rows="3"></textarea>
+              <div id="quiz-result" class="quiz-result" style="display:none;"></div>
+              <div class="quiz-actions">
+                <button id="quiz-submit-btn" class="btn-primary">Submit Answer</button>
+                <button id="quiz-next-btn" class="btn-secondary" style="display:none;">Next Question</button>
+                <button id="quiz-restart-btn" class="btn-secondary" style="display:none;">New Quiz</button>
+              </div>
+            </div>
+            <div id="quiz-score-summary" class="score-summary" style="display:none;"></div>
           </div>
         </section>
 
