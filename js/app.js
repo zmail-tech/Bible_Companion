@@ -2605,7 +2605,10 @@ async function generateQuiz() {
     headers["Authorization"] = `Bearer ${provider.apiKey}`;
   }
 
-  const prompt = `Generate up to 20 quiz questions based on these Bible passages. Include a mix of fill-in-the-blank, short answer, and identification questions. Format each question on its own line prefixed with "Q: " followed by the correct answer prefixed with "A: " on the next line. Do not include any extra text, numbering, or explanation.
+  const countInput = document.getElementById("quiz-count-input");
+  const questionCount = Math.min(Math.max(parseInt(countInput?.value || "10", 10) || 10, 1), 50);
+
+  const prompt = `Generate exactly ${questionCount} quiz questions based on these Bible passages. Include a mix of fill-in-the-blank, short answer, and identification questions. Format each question on its own line prefixed with "Q: " followed by the correct answer prefixed with "A: " on the next line. Do not include any extra text, numbering, or explanation.
 
 PASSAGES:
 ${passageText}`;
@@ -2741,6 +2744,9 @@ function renderQuiz() {
   const restartBtn = document.getElementById("quiz-restart-btn");
   if (restartBtn) restartBtn.style.display = "none";
 
+  const resetBtn = document.getElementById("quiz-reset-btn");
+  if (resetBtn) resetBtn.style.display = "inline-block";
+
   const scoreSummary = document.getElementById("quiz-score-summary");
   if (scoreSummary) scoreSummary.style.display = "none";
 
@@ -2800,6 +2806,7 @@ function showScoreSummary() {
   const submitBtn = document.getElementById("quiz-submit-btn");
   const nextBtn = document.getElementById("quiz-next-btn");
   const restartBtn = document.getElementById("quiz-restart-btn");
+  const resetBtn = document.getElementById("quiz-reset-btn");
   const scoreSummary = document.getElementById("quiz-score-summary");
 
   if (progressEl) progressEl.textContent = "Quiz Complete";
@@ -2809,6 +2816,7 @@ function showScoreSummary() {
   if (submitBtn) submitBtn.style.display = "none";
   if (nextBtn) nextBtn.style.display = "none";
   if (restartBtn) restartBtn.style.display = "inline-block";
+  if (resetBtn) resetBtn.style.display = "inline-block";
 
   if (scoreSummary) {
     const pct = quizScore.total > 0 ? Math.round((quizScore.correct / quizScore.total) * 100) : 0;
@@ -2929,6 +2937,11 @@ function initReviewMode() {
 
   if (restartBtn) {
     restartBtn.addEventListener("click", resetQuiz);
+  }
+
+  const resetBtn = document.getElementById("quiz-reset-btn");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", resetQuiz);
   }
 
   if (answerInput) {
