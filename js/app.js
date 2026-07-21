@@ -2606,22 +2606,40 @@ async function generateQuiz() {
     headers["Authorization"] = `Bearer ${provider.apiKey}`;
   }
 
-  const countInput = document.getElementById("quiz-count-input");
-  const questionCount = Math.min(Math.max(parseInt(countInput?.value || "10", 10) || 10, 1), 50);
+  const mcInput = document.getElementById("quiz-mc-input");
+  const shortInput = document.getElementById("quiz-short-input");
+  const mcCount = Math.min(Math.max(parseInt(mcInput?.value || "5", 10) || 5, 0), 50);
+  const shortCount = Math.min(Math.max(parseInt(shortInput?.value || "2", 10) || 2, 0), 20);
+  const totalCount = mcCount + shortCount;
 
-  const prompt = `Generate exactly ${questionCount} multiple-choice quiz questions based on these Bible passages. Each question must have exactly 4 answer choices, with only one correct answer. Format each question as follows:
+  if (totalCount === 0) {
+    showReviewError("Please set at least 1 question (MC or short-form).");
+    return;
+  }
 
-Q: [question text]
-A: [choice 1 text]
-B: [choice 2 text]
-C: [choice 3 text]
-D: [choice 4 text]
-ANSWER: [single letter A, B, C, or D indicating the correct choice]
+  const promptParts = [];
+  promptParts.push(`Generate exactly ${mcCount} multiple-choice questions and ${shortCount} short-form questions based on these Bible passages.`);
+  promptParts.push("");
+  promptParts.push("MULTIPLE-CHOICE FORMAT:");
+  promptParts.push("Q: [question text]");
+  promptParts.push("A: [choice 1 text]");
+  promptParts.push("B: [choice 2 text]");
+  promptParts.push("C: [choice 3 text]");
+  promptParts.push("D: [choice 4 text]");
+  promptParts.push("ANSWER: [single letter A, B, C, or D indicating the correct choice]");
+  promptParts.push("");
+  promptParts.push("SHORT-FORM FORMAT:");
+  promptParts.push("Q: [question text]");
+  promptParts.push("ANSWER: [concise ideal answer, 1-3 sentences]");
+  promptParts.push("");
+  promptParts.push("List all multiple-choice questions first, then all short-form questions. Do not label which type each question is — the format makes it clear (4 choices = MC, single ANSWER = short-form).");
+  promptParts.push("");
+  promptParts.push("Do not include any extra text, numbering, or explanation. Make the wrong choices plausible but clearly incorrect based on the passages.");
+  promptParts.push("");
+  promptParts.push("PASSAGES:");
+  promptParts.push(passageText);
 
-Do not include any extra text, numbering, or explanation. Make the wrong choices plausible but clearly incorrect based on the passages.
-
-PASSAGES:
-${passageText}`;
+  const prompt = promptParts.join("\n");
 
   const generateBtn = document.getElementById("generate-quiz-btn");
   if (generateBtn) {
@@ -2636,10 +2654,10 @@ ${passageText}`;
       body: JSON.stringify({
         model: commentaryConfig.modelId,
         messages: [
-          { role: "system", content: "You are a Bible quiz generator. Output multiple-choice questions in Q:/A:/B:/C:/D:/ANSWER: format only." },
+          { role: "system", content: "You are a Bible quiz generator. Generate multiple-choice questions (Q/A/B/C/D/ANSWER) and short-form questions (Q/ANSWER). Output in the specified format only." },
           { role: "user", content: prompt }
         ],
-        max_tokens: 4096,
+        max_tokens: 8192,
         temperature: 0.5
       })
     });
@@ -2654,9 +2672,9 @@ ${passageText}`;
 
     const parsed = parseQuizResponse(content);
 
-    if (parsed.length < 3) {
+    if (parsed.length < totalCount) {
       if (parsed.length > 0) {
-        if (!confirm(`Only ${parsed.length} questions generated. Continue anyway?`)) {
+        if (!confirm(`Only ${parsed.length} of ${totalCount} questions generated. Continue anyway?`)) {
           return;
         }
       } else {
@@ -2689,13 +2707,14 @@ function parseQuizResponse(content) {
   for (const line of lines) {
     const trimmed = line.trim();
     if (trimmed.startsWith("Q:") || trimmed.startsWith("Q: ")) {
-      if (currentQuestion && currentQuestion.question && currentQuestion.choices && currentQuestion.choices.length === 4 && currentQuestion.correctIndex !== null) {
+      if (currentQuestion && isQuestionValid(currentQuestion)) {
         questions.push(currentQuestion);
       }
       currentQuestion = {
         question: trimmed.replace(/^Q:\s*/, ""),
         choices: [],
-        correctIndex: null
+        correctIndex: null,
+        referenceAnswer: null
       };
     } else if (trimmed.startsWith("A:") || trimmed.startsWith("A: ")) {
       if (currentQuestion && currentQuestion.choices.length < 4) {
@@ -2714,10 +2733,17 @@ function parseQuizResponse(content) {
         currentQuestion.choices.push(trimmed.replace(/^D:\s*/, ""));
       }
     } else if ((trimmed.startsWith("ANSWER:") || trimmed.startsWith("ANSWER: ")) && currentQuestion) {
-      const letter = trimmed.replace(/^ANSWER:\s*/, "").toUpperCase();
-      const idx = letter.charCodeAt(0) - 65;
-      if (idx >= 0 && idx <= 3) {
-        currentQuestion.correctIndex = idx;
+      const answerText = trimmed.replace(/^ANSWER:\s*/, "").trim();
+      if (currentQuestion.choices.length === 4) {
+        const letter = answerText.toUpperCase();
+        const idx = letter.charCodeAt(0) - 65;
+        if (idx >= 0 && idx <= 3) {
+          currentQuestion.correctIndex = idx;
+        }
+        currentQuestion.type = "mc";
+      } else if (currentQuestion.choices.length === 0) {
+        currentQuestion.referenceAnswer = answerText;
+        currentQuestion.type = "short";
       }
     } else if (currentQuestion && currentQuestion.choices.length < 4) {
       const lastChoice = currentQuestion.choices[currentQuestion.choices.length - 1];
@@ -2729,11 +2755,19 @@ function parseQuizResponse(content) {
     }
   }
 
-  if (currentQuestion && currentQuestion.question && currentQuestion.choices.length === 4 && currentQuestion.correctIndex !== null) {
+  if (currentQuestion && isQuestionValid(currentQuestion)) {
     questions.push(currentQuestion);
   }
 
-  return questions.filter(q => q.question && q.choices && q.choices.length === 4 && q.correctIndex !== null);
+  return questions;
+}
+
+function isQuestionValid(q) {
+  if (!q || !q.question) return false;
+  if (q.type === "short") {
+    return q.referenceAnswer && q.referenceAnswer.length > 0;
+  }
+  return q.choices && q.choices.length === 4 && q.correctIndex !== null;
 }
 
 function renderQuiz() {
@@ -2754,23 +2788,40 @@ function renderQuiz() {
     questionEl.textContent = quizQuestions[currentQuestionIndex].question;
   }
 
-  const choicesContainer = document.getElementById("quiz-choices");
-  if (choicesContainer) {
-    const q = quizQuestions[currentQuestionIndex];
-    const labels = ["A", "B", "C", "D"];
-    choicesContainer.innerHTML = "";
-    choicesContainer.style.display = "block";
-    choicesContainer.disabled = false;
+  const q = quizQuestions[currentQuestionIndex];
+  const isShort = q.type === "short";
 
-    q.choices.forEach((choice, idx) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "quiz-choice-btn";
-      btn.textContent = `${labels[idx]}. ${choice}`;
-      btn.dataset.index = idx;
-      btn.addEventListener("click", () => selectChoice(idx));
-      choicesContainer.appendChild(btn);
-    });
+  const choicesContainer = document.getElementById("quiz-choices");
+  const shortAnswerEl = document.getElementById("quiz-short-answer");
+  const textarea = document.getElementById("short-answer-textarea");
+
+  if (isShort) {
+    if (choicesContainer) choicesContainer.style.display = "none";
+    if (shortAnswerEl) {
+      shortAnswerEl.style.display = "block";
+      if (textarea) {
+        textarea.value = "";
+        textarea.disabled = false;
+      }
+    }
+  } else {
+    if (shortAnswerEl) shortAnswerEl.style.display = "none";
+    if (choicesContainer) {
+      const labels = ["A", "B", "C", "D"];
+      choicesContainer.innerHTML = "";
+      choicesContainer.style.display = "block";
+      choicesContainer.disabled = false;
+
+      q.choices.forEach((choice, idx) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "quiz-choice-btn";
+        btn.textContent = `${labels[idx]}. ${choice}`;
+        btn.dataset.index = idx;
+        btn.addEventListener("click", () => selectChoice(idx));
+        choicesContainer.appendChild(btn);
+      });
+    }
   }
 
   const resultEl = document.getElementById("quiz-result");
@@ -2780,6 +2831,7 @@ function renderQuiz() {
   if (submitBtn) {
     submitBtn.style.display = "inline-block";
     submitBtn.disabled = true;
+    submitBtn.textContent = "Submit Answer";
   }
 
   const nextBtn = document.getElementById("quiz-next-btn");
@@ -2795,6 +2847,16 @@ function renderQuiz() {
   if (scoreSummary) scoreSummary.style.display = "none";
 
   selectedChoiceIndex = null;
+
+  if (isShort && textarea) {
+    const handler = () => {
+      if (submitBtn) submitBtn.disabled = !textarea.value.trim();
+    };
+    textarea.removeEventListener("input", textarea._shortInputHandler);
+    textarea._shortInputHandler = handler;
+    textarea.addEventListener("input", handler);
+    handler();
+  }
 }
 
 function selectChoice(idx) {
@@ -2816,14 +2878,26 @@ function selectChoice(idx) {
 }
 
 function submitQuizAnswer() {
-  const choicesContainer = document.getElementById("quiz-choices");
+  const q = quizQuestions[currentQuestionIndex];
   const resultEl = document.getElementById("quiz-result");
   const nextBtn = document.getElementById("quiz-next-btn");
+  const submitBtn = document.getElementById("quiz-submit-btn");
 
-  if (selectedChoiceIndex === null) return;
+  if (q.type === "short") {
+    const textarea = document.getElementById("short-answer-textarea");
+    if (!textarea || !textarea.value.trim()) return;
+    evaluateShortAnswerSubmission(textarea.value.trim(), q, resultEl, nextBtn, submitBtn);
+  } else {
+    if (selectedChoiceIndex === null) return;
+    submitMcAnswer(resultEl, nextBtn, submitBtn);
+  }
+}
+
+function submitMcAnswer(resultEl, nextBtn, submitBtn) {
+  const choicesContainer = document.getElementById("quiz-choices");
 
   const q = quizQuestions[currentQuestionIndex];
-  quizAnswers[currentQuestionIndex] = selectedChoiceIndex;
+  quizAnswers[currentQuestionIndex] = { type: "mc", value: selectedChoiceIndex };
 
   const correct = selectedChoiceIndex === q.correctIndex;
   if (correct) {
@@ -2851,11 +2925,125 @@ function submitQuizAnswer() {
       ${!correct ? `<div class="result-user">Your answer: ${labels[selectedChoiceIndex]}. ${escapeHtml(q.choices[selectedChoiceIndex])}</div>` : ""}`;
   }
 
-  const submitBtnEl = document.getElementById("quiz-submit-btn");
-  if (submitBtnEl) submitBtnEl.style.display = "none";
+  if (submitBtn) submitBtn.style.display = "none";
   if (nextBtn) nextBtn.style.display = "inline-block";
 
   saveReviewState();
+}
+
+async function evaluateShortAnswerSubmission(userAnswer, q, resultEl, nextBtn, submitBtn) {
+  const shortAnswerEl = document.getElementById("quiz-short-answer");
+  const textarea = document.getElementById("short-answer-textarea");
+
+  if (textarea) textarea.disabled = true;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.display = "none";
+  }
+
+  const evaluatingEl = document.createElement("div");
+  evaluatingEl.className = "quiz-evaluating";
+  evaluatingEl.textContent = "Evaluating your answer...";
+  if (resultEl) {
+    resultEl.style.display = "none";
+  }
+  if (shortAnswerEl) {
+    shortAnswerEl.parentNode.insertBefore(evaluatingEl, shortAnswerEl.nextSibling);
+  }
+
+  try {
+    const evaluation = await evaluateShortAnswer(userAnswer, q.referenceAnswer, q.question);
+    evaluatingEl.remove();
+
+    quizAnswers[currentQuestionIndex] = {
+      type: "short",
+      value: userAnswer,
+      evaluation
+    };
+
+    if (evaluation.correct) {
+      quizScore.correct++;
+    }
+    quizScore.total++;
+
+    if (resultEl) {
+      resultEl.style.display = "block";
+      resultEl.className = `quiz-evaluation-result ${evaluation.correct ? "correct" : "incorrect"}`;
+      resultEl.innerHTML = `<span class="eval-badge ${evaluation.correct ? "correct" : "incorrect"}">${evaluation.correct ? "Correct" : "Incorrect"}</span>
+        <div class="eval-explanation">${escapeHtml(evaluation.explanation)}</div>
+        <div class="eval-reference">Reference: ${escapeHtml(q.referenceAnswer)}</div>`;
+    }
+
+    if (nextBtn) nextBtn.style.display = "inline-block";
+    saveReviewState();
+  } catch (err) {
+    evaluatingEl.remove();
+    if (resultEl) {
+      resultEl.style.display = "block";
+      resultEl.className = "quiz-evaluation-result incorrect";
+      resultEl.innerHTML = `<span class="eval-badge incorrect">Evaluation Failed</span>
+        <div class="eval-explanation">Could not evaluate answer: ${escapeHtml(err.message)}. Please try again.</div>`;
+    }
+    if (textarea) textarea.disabled = false;
+    if (submitBtn) {
+      submitBtn.style.display = "inline-block";
+      submitBtn.disabled = false;
+    }
+  }
+}
+
+async function evaluateShortAnswer(userAnswer, referenceAnswer, question) {
+  const commentaryConfig = getCommentaryModel();
+  if (!commentaryConfig) {
+    throw new Error("Commentary model not configured.");
+  }
+
+  const provider = commentaryConfig.provider;
+  const headers = { "Content-Type": "application/json" };
+  if (provider.apiKey) {
+    headers["Authorization"] = `Bearer ${provider.apiKey}`;
+  }
+
+  const prompt = `You are evaluating a student's answer to a Bible study question.
+
+QUESTION: ${question}
+REFERENCE ANSWER: ${referenceAnswer}
+STUDENT ANSWER: ${userAnswer}
+
+Evaluate whether the student's answer is correct. The student does not need to match the reference answer exactly — they just need to demonstrate understanding of the key concept.
+
+Respond in this exact format:
+CORRECT: [yes or no]
+EXPLANATION: [1-2 sentences explaining why, and what the key points should have been]`;
+
+  const res = await fetch(provider.endpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: commentaryConfig.modelId,
+      messages: [
+        { role: "system", content: "You are a Bible study evaluator. Output CORRECT: and EXPLANATION: format only." },
+        { role: "user", content: prompt }
+      ],
+      max_tokens: 512,
+      temperature: 0.3
+    })
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  const content = stripThinkingTags(data.choices?.[0]?.message?.content || "");
+
+  const correctMatch = content.match(/CORRECT:\s*(yes|no)/i);
+  const explanationMatch = content.match(/EXPLANATION:\s*([\s\S]*)/i);
+
+  return {
+    correct: correctMatch ? correctMatch[1].toLowerCase() === "yes" : false,
+    explanation: explanationMatch ? explanationMatch[1].trim() : "No explanation provided."
+  };
 }
 
 function nextQuizQuestion() {
@@ -2882,6 +3070,8 @@ function showScoreSummary() {
   if (progressEl) progressEl.textContent = "Quiz Complete";
   if (questionEl) questionEl.textContent = "";
   if (choicesContainer) choicesContainer.style.display = "none";
+  const shortAnswerEl = document.getElementById("quiz-short-answer");
+  if (shortAnswerEl) shortAnswerEl.style.display = "none";
   if (resultEl) resultEl.style.display = "none";
   if (submitBtn) submitBtn.style.display = "none";
   if (nextBtn) nextBtn.style.display = "none";
@@ -2896,13 +3086,24 @@ function showScoreSummary() {
       <p class="score-number">${quizScore.correct} / ${quizScore.total} (${pct}%)</p>
       <div class="score-details">
         ${quizQuestions.map((q, i) => {
-          const userChoice = quizAnswers[i];
-          const wasCorrect = userChoice !== null && userChoice === q.correctIndex;
-          return `<div class="score-item ${wasCorrect ? "correct" : "incorrect"}">
-            <span class="score-icon">${wasCorrect ? "\u2713" : "\u2717"}</span>
-            <span class="score-q">${escapeHtml(q.question)}</span>
-            <span class="score-a">${wasCorrect ? "" : `Correct: ${labels[q.correctIndex]}. ${escapeHtml(q.choices[q.correctIndex])}`}</span>
-          </div>`;
+          const answer = quizAnswers[i];
+          if (q.type === "short") {
+            const eval_ = answer?.evaluation;
+            const wasCorrect = eval_?.correct || false;
+            return `<div class="score-item ${wasCorrect ? "correct" : "incorrect"}">
+              <span class="score-icon">${wasCorrect ? "\u2713" : "\u2717"}</span>
+              <span class="score-q">${escapeHtml(q.question)}</span>
+              <span class="score-a">${wasCorrect ? "" : `<div class="eval-explanation">${escapeHtml(eval_?.explanation || "")}</div><div class="eval-reference">Reference: ${escapeHtml(q.referenceAnswer)}</div>`}</span>
+            </div>`;
+          } else {
+            const userChoice = answer?.value;
+            const wasCorrect = userChoice !== null && userChoice === q.correctIndex;
+            return `<div class="score-item ${wasCorrect ? "correct" : "incorrect"}">
+              <span class="score-icon">${wasCorrect ? "\u2713" : "\u2717"}</span>
+              <span class="score-q">${escapeHtml(q.question)}</span>
+              <span class="score-a">${wasCorrect ? "" : `Correct: ${labels[q.correctIndex]}. ${escapeHtml(q.choices[q.correctIndex])}`}</span>
+            </div>`;
+          }
         }).join("")}
       </div>`;
   }
@@ -2919,20 +3120,6 @@ function resetQuiz() {
   selectedChoiceIndex = null;
   clearReviewState();
   renderReviewSetup();
-}
-
-function checkAnswer(userAnswer, correctAnswer) {
-  const normalize = (s) => s.toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
-  const user = normalize(userAnswer);
-  const correct = normalize(correctAnswer);
-
-  if (user === correct) return true;
-
-  const correctWords = correct.split(" ").filter(w => w.length > 2);
-  if (correctWords.length === 0) return user.length > 0;
-
-  const matchCount = correctWords.filter(w => user.includes(w)).length;
-  return matchCount >= Math.ceil(correctWords.length * 0.6);
 }
 
 /* --- Review Mode Persistence --- */
@@ -3021,9 +3208,10 @@ function initReviewMode() {
     if (isReviewMode && quizQuestions.length > 0 && currentQuestionIndex < quizQuestions.length) {
       const resultEl = document.getElementById("quiz-result");
       const answered = resultEl && resultEl.style.display !== "none";
+      const q = quizQuestions[currentQuestionIndex];
       const key = e.key.toLowerCase();
 
-      if (!answered && ["a", "b", "c", "d"].includes(key)) {
+      if (q.type === "mc" && !answered && ["a", "b", "c", "d"].includes(key)) {
         e.preventDefault();
         const idx = key.charCodeAt(0) - 97;
         selectChoice(idx);
