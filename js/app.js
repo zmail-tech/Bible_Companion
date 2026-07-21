@@ -2594,13 +2594,13 @@ async function generateQuiz() {
   if (!validated) return;
 
   const passageText = buildPassageText(validated);
-  const smallConfig = getSmallModel();
-  if (!smallConfig) {
-    showReviewError("Small model not configured. Please set a Small Model in Settings.");
+  const commentaryConfig = getCommentaryModel();
+  if (!commentaryConfig) {
+    showReviewError("Commentary model not configured. Please set a Commentary Model in Settings.");
     return;
   }
 
-  const provider = smallConfig.provider;
+  const provider = commentaryConfig.provider;
   const headers = { "Content-Type": "application/json" };
   if (provider.apiKey) {
     headers["Authorization"] = `Bearer ${provider.apiKey}`;
@@ -2634,7 +2634,7 @@ ${passageText}`;
       method: "POST",
       headers,
       body: JSON.stringify({
-        model: smallConfig.modelId,
+        model: commentaryConfig.modelId,
         messages: [
           { role: "system", content: "You are a Bible quiz generator. Output multiple-choice questions in Q:/A:/B:/C:/D:/ANSWER: format only." },
           { role: "user", content: prompt }
