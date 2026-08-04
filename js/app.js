@@ -556,6 +556,193 @@ function initModelSwitcher() {
   });
 }
 
+function formatVerseReference(book, chapter, verse) {
+  return `${book} ${chapter}:${verse}`;
+}
+
+function formatVerseRange(book, chapter, startVerse, endVerse) {
+  if (startVerse === endVerse) {
+    return `${book} ${chapter}:${startVerse}`;
+  }
+  return `${book} ${chapter}:${startVerse}-${endVerse}`;
+}
+
+function getSelectedVersesText() {
+  const tab = getActiveTab();
+  if (!tab) return "";
+  const verses = getChapter(tab.book, tab.chapter);
+  if (!verses || !verses.length) return "";
+
+  const verseMap = {};
+  for (const v of verses) {
+    verseMap[v.number] = v.text;
+  }
+
+  const sortedSelection = Array.from(tab.selectedVerses).sort((a, b) => a - b);
+  const parts = [];
+  for (const v of sortedSelection) {
+    const text = verseMap[v];
+    if (text) {
+      parts.push(text);
+    }
+  }
+  return parts.join("\n");
+}
+
+function getSelectedVersesWithReference() {
+  const tab = getActiveTab();
+  if (!tab) return "";
+  const verses = getChapter(tab.book, tab.chapter);
+  if (!verses || !verses.length) return "";
+
+  const verseMap = {};
+  for (const v of verses) {
+    verseMap[v.number] = v.text;
+  }
+
+  const sortedSelection = Array.from(tab.selectedVerses).sort((a, b) => a - b);
+  const parts = [];
+  for (const v of sortedSelection) {
+    const text = verseMap[v];
+    if (text) {
+      parts.push(`${formatReference(tab.book, tab.chapter, v)} ${text}`);
+    }
+  }
+  return parts.join("\n");
+}
+
+function getSelectedVersesWithVersion(version) {
+  const tab = getActiveTab();
+  if (!tab) return "";
+  const verses = getChapter(tab.book, tab.chapter);
+  if (!verses || !verses.length) return "";
+
+  const verseMap = {};
+  for (const v of verses) {
+    verseMap[v.number] = v.text;
+  }
+
+  const sortedSelection = Array.from(tab.selectedVerses).sort((a, b) => a - b);
+  const parts = [];
+  for (const v of sortedSelection) {
+    const text = verseMap[v];
+    if (text) {
+      parts.push(`${formatReference(tab.book, tab.chapter, v)} (${version}) ${text}`);
+    }
+  }
+  return parts.join("\n");
+}
+
+function getChapterTextOnly() {
+  const tab = getActiveTab();
+  if (!tab) return "";
+  const verses = getChapter(tab.book, tab.chapter);
+  if (!verses || !verses.length) return "";
+
+  const parts = [];
+  for (const v of verses) {
+    if (v.text) {
+      parts.push(v.text);
+    }
+  }
+  return parts.join("\n");
+}
+
+function getChapterWithReference() {
+  const tab = getActiveTab();
+  if (!tab) return "";
+  const verses = getChapter(tab.book, tab.chapter);
+  if (!verses || !verses.length) return "";
+
+  const parts = [];
+  for (const v of verses) {
+    if (v.text) {
+      parts.push(`${formatReference(tab.book, tab.chapter, v.number)} ${v.text}`);
+    }
+  }
+  return parts.join("\n");
+}
+
+function getChapterWithVersion(version) {
+  const tab = getActiveTab();
+  if (!tab) return "";
+  const verses = getChapter(tab.book, tab.chapter);
+  if (!verses || !verses.length) return "";
+
+  const parts = [];
+  for (const v of verses) {
+    if (v.text) {
+      parts.push(`${formatReference(tab.book, tab.chapter, v.number)} (${version}) ${v.text}`);
+    }
+  }
+  return parts.join("\n");
+}
+
+function showToast(message) {
+  const toast = document.getElementById("toast-notification");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add("visible");
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(() => {
+    toast.classList.remove("visible");
+  }, 1500);
+}
+
+function initCopyControls() {
+  const copyTextBtn = document.getElementById("copy-text-btn");
+  const includeVersion = document.getElementById("copy-include-version");
+  const includeReference = document.getElementById("copy-include-reference");
+
+  if (!copyTextBtn || !includeVersion || !includeReference) return;
+
+  copyTextBtn.addEventListener("click", () => {
+    const tab = getActiveTab();
+    if (!tab) return;
+
+    const withVersion = includeVersion.checked;
+    const withReference = includeReference.checked;
+
+    let suffix = "";
+    if (withVersion || withReference) {
+      const parts = [];
+      if (withReference) {
+        if (tab.selectedVerses.size > 0) {
+          const sortedSelection = Array.from(tab.selectedVerses).sort((a, b) => a - b);
+          const startVerse = sortedSelection[0];
+          const endVerse = sortedSelection[sortedSelection.length - 1];
+          parts.push(formatVerseRange(tab.book, tab.chapter, startVerse, endVerse));
+        } else {
+          parts.push(formatVerseReference(tab.book, tab.chapter, ""));
+        }
+      }
+      if (withVersion) {
+        parts.push("BSB");
+      }
+      if (parts.length > 0) {
+        suffix = ` - ${parts.join(" | ")}`;
+      }
+    }
+
+    let text;
+    if (tab.selectedVerses.size > 0) {
+      text = getSelectedVersesText();
+    } else {
+      text = getChapterTextOnly();
+    }
+
+    if (suffix) {
+      text = `${text}${suffix}`;
+    }
+
+    navigator.clipboard.writeText(text).then(() => {
+      showToast("Text copied to clipboard");
+    }).catch(() => {
+      showToast("Failed to copy");
+    });
+  });
+}
+
 function bootstrap() {
   const persisted = loadSettingsLocally();
   console.log("[app] bootstrap: persisted settings =", persisted);
@@ -670,6 +857,7 @@ async function startApp() {
   bindKeyboardShortcuts();
   initAiIntentBox();
   initAiInput();
+  initCopyControls();
 
   const success = await loadBibleData();
   if (success) {
