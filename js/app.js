@@ -1444,7 +1444,7 @@ async function sendToAI(intentKey, followUpText) {
         verbosity
       });
 
-      await streamAIResponse(provider, responseEl, statusEl, tab, requestBody);
+      await streamAIResponse(provider, responseEl, statusEl, tab, requestBody, { clearResponse: false });
     } else {
       tab.chatHistory = [];
       document.querySelector("#ai-header h2").textContent = `AI: ${intentLabel}`;
@@ -1483,7 +1483,7 @@ async function sendToAI(intentKey, followUpText) {
   }
 }
 
-async function streamAIResponse(provider, responseEl, statusEl, tab, requestBody) {
+async function streamAIResponse(provider, responseEl, statusEl, tab, requestBody, options = {}) {
   try {
     const headers = {
       "Content-Type": "application/json"
@@ -1546,7 +1546,9 @@ async function streamAIResponse(provider, responseEl, statusEl, tab, requestBody
     const streamingEl = document.createElement("div");
     streamingEl.className = "ai-assistant-message streaming-response";
     streamingEl.innerHTML = `<span class="loading-spinner"></span>`;
-    responseEl.innerHTML = "";
+    if (options.clearResponse !== false) {
+      responseEl.innerHTML = "";
+    }
     responseEl.appendChild(streamingEl);
 
     statusEl.textContent = "Streaming...";
