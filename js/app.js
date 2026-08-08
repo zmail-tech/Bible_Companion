@@ -1445,6 +1445,11 @@ async function sendToAI(intentKey, followUpText) {
       });
 
       await streamAIResponse(provider, responseEl, statusEl, tab, requestBody, { clearResponse: false });
+
+      const lastEntry = tab.chatHistory[tab.chatHistory.length - 1];
+      if (lastEntry && lastEntry.role === "assistant") {
+        await generateFollowUpQuestions(lastEntry.content, responseEl);
+      }
     } else {
       tab.chatHistory = [];
       document.querySelector("#ai-header h2").textContent = `AI: ${intentLabel}`;
