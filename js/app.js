@@ -872,6 +872,7 @@ async function startApp() {
 
   registerServiceWorker();
   initPrayerMode();
+  initNotesMode();
 }
 
 // --- Navigation ---
@@ -2048,17 +2049,31 @@ function switchMode(mode) {
   const aiIntentBox = document.getElementById("ai-intent-box");
   const prayerEditor = document.getElementById("prayer-editor");
   const reviewPanel = document.getElementById("review-panel");
+  const notesPanel = document.getElementById("notes-panel");
   const bibleTab = document.getElementById("mode-bible-tab");
   const prayerTab = document.getElementById("mode-prayer-tab");
   const reviewTab = document.getElementById("mode-review-tab");
+  const notesTab = document.getElementById("mode-notes-tab");
 
   bibleTab.classList.toggle("active", mode === "bible");
   prayerTab.classList.toggle("active", mode === "prayer");
   if (reviewTab) reviewTab.classList.toggle("active", mode === "review");
+  if (notesTab) notesTab.classList.toggle("active", mode === "notes");
 
   const tabBar = document.getElementById("tab-bar");
 
-  if (isReviewMode) {
+  if (mode === "notes") {
+    bibleReader.classList.add("hidden");
+    splitter.classList.add("hidden");
+    navigationBar.classList.add("hidden");
+    aiPanel.classList.add("hidden");
+    if (aiIntentBox) aiIntentBox.classList.add("hidden");
+    prayerEditor.classList.add("hidden");
+    if (reviewPanel) reviewPanel.classList.add("hidden");
+    if (notesPanel) notesPanel.classList.remove("hidden");
+    tabBar.classList.add("hidden");
+    restoreNotesText();
+  } else if (isReviewMode) {
     bibleReader.classList.add("hidden");
     splitter.classList.add("hidden");
     navigationBar.classList.add("hidden");
@@ -2066,6 +2081,7 @@ function switchMode(mode) {
     if (aiIntentBox) aiIntentBox.classList.add("hidden");
     prayerEditor.classList.add("hidden");
     if (reviewPanel) reviewPanel.classList.remove("hidden");
+    if (notesPanel) notesPanel.classList.add("hidden");
     tabBar.classList.add("hidden");
     renderReviewSetup();
   } else if (isPrayerMode) {
@@ -2076,6 +2092,7 @@ function switchMode(mode) {
     if (aiIntentBox) aiIntentBox.classList.add("hidden");
     prayerEditor.classList.remove("hidden");
     if (reviewPanel) reviewPanel.classList.add("hidden");
+    if (notesPanel) notesPanel.classList.add("hidden");
     tabBar.classList.remove("hidden");
     renderTabBar();
     restorePrayerText();
@@ -2087,6 +2104,7 @@ function switchMode(mode) {
     if (aiIntentBox) aiIntentBox.classList.remove("hidden");
     prayerEditor.classList.add("hidden");
     if (reviewPanel) reviewPanel.classList.add("hidden");
+    if (notesPanel) notesPanel.classList.add("hidden");
     tabBar.classList.remove("hidden");
     renderTabBar();
   }
@@ -3585,5 +3603,303 @@ function initRecipients() {
     modal.querySelector(".modal-overlay").addEventListener("click", closeRecipientsModal);
   }
 }
+
+/* --- Notes Mode --- */
+
+const NOTES_STORAGE_KEY = "bibleCompanion_notes";
+
+function showNotesStatus(msg) {
+  const status = document.getElementById("notes-status");
+  if (!status) return;
+  status.textContent = msg;
+  status.style.opacity = "1";
+  if (msg) {
+    clearTimeout(status._hideTimer);
+    status._hideTimer = setTimeout(() => {
+      status.style.opacity = "0";
+      setTimeout(() => { status.textContent = ""; }, 400);
+    }, 2500);
+  }
+}
+
+function saveNotesText() {
+  const textarea = document.getElementById("notes-textarea");
+  if (textarea) {
+    localStorage.setItem(NOTES_STORAGE_KEY, textarea.value);
+  }
+  showNotesStatus("Saved");
+}
+
+function restoreNotesText() {
+  const textarea = document.getElementById("notes-textarea");
+  if (textarea) {
+    textarea.value = localStorage.getItem(NOTES_STORAGE_KEY) || "";
+  }
+}
+
+let isEnhancingNotes = false;
+
+const NOTES_ENHANCE_SYSTEM = "You are a helpful writing assistant. Polish and enhance the user's notes — improve clarity, grammar, and flow while preserving the original meaning, facts, and structure. Return the enhanced text in Markdown format. Do not add commentary or explanations — just output the improved Markdown.";
+
+async function enhanceNotesWithAI() {
+  if (isEnhancingNotes) return;
+  const textarea = document.getElementById("notes-textarea");
+  const text = textarea.value.trim();
+  if (!text) {
+    showNotesStatus("Nothing to enhance");
+    return;
+  }
+  const prayerConfig = getPrayerModel();
+  if (!prayerConfig) {
+    showNotesStatus("No model configured");
+    return;
+  }
+  const provider = prayerConfig.provider;
+
+  textarea.dataset.originalText = textarea.value;
+  isEnhancingNotes = true;
+  showNotesStatus("Enhancing with AI...");
+
+  const requestBody = {
+    model: prayerConfig.modelId,
+    messages: [
+      { role: "system", content: NOTES_ENHANCE_SYSTEM },
+      { role: "user", content: text }
+    ],
+    max_tokens: 12000,
+    temperature: 0.3
+  };
+
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (provider.apiKey) {
+      headers["Authorization"] = `Bearer ${provider.apiKey}`;
+    }
+
+    const REQUEST_TIMEOUT = 120000;
+    const STREAM_IDLE_TIMEOUT = 30000;
+    const abortController = new AbortController();
+    let activeAbortReason = "";
+    const timeoutId = setTimeout(() => {
+      activeAbortReason = "Request timed out after 120s";
+      abortController.abort();
+    }, REQUEST_TIMEOUT);
+
+    const response = await fetch(provider.endpoint, {
+      method: "POST",
+      headers: { ...headers, "Accept": "text/event-stream" },
+      body: JSON.stringify({ ...requestBody, stream: true }),
+      signal: abortController.signal
+    }).finally(() => clearTimeout(timeoutId));
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let errMsg = `API returned ${response.status}`;
+      if (response.status === 401) errMsg += " - Authentication failed.";
+      else if (response.status === 429) errMsg += " - Rate limited.";
+      else if (response.status === 0 || errText.includes("Failed to fetch")) errMsg = "Network error.";
+      else errMsg += `: ${errText.substring(0, 200)}`;
+      showNotesStatus(errMsg);
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = "";
+    let buffer = "";
+
+    showNotesStatus("Streaming...");
+    let streamIdleTimer = null;
+    const resetStreamIdleTimer = () => {
+      if (streamIdleTimer) clearTimeout(streamIdleTimer);
+      streamIdleTimer = setTimeout(() => {
+        activeAbortReason = "Stream stalled for 30s";
+        abortController.abort();
+      }, STREAM_IDLE_TIMEOUT);
+    };
+    resetStreamIdleTimer();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === "data: [DONE]") {
+          resetStreamIdleTimer();
+          continue;
+        }
+        if (trimmed.startsWith("data: ")) {
+          try {
+            const json = JSON.parse(trimmed.slice(6));
+            const delta = json.choices?.[0]?.delta?.content || "";
+            if (delta) {
+              fullText += delta;
+              resetStreamIdleTimer();
+            }
+          } catch (e) { /* skip parse errors */ }
+        }
+      }
+    }
+
+    if (fullText) {
+      textarea.value = fullText;
+      const undoBtn = document.getElementById("undo-notes-btn");
+      if (undoBtn) undoBtn.disabled = false;
+      showNotesStatus("Enhanced");
+      localStorage.setItem(NOTES_STORAGE_KEY, fullText);
+    } else {
+      showNotesStatus("AI returned no content");
+    }
+  } catch (e) {
+    if (e.name === "AbortError") {
+      if (fullText) {
+        textarea.value = fullText;
+        showNotesStatus("Streaming interrupted. Partial result shown.");
+        localStorage.setItem(NOTES_STORAGE_KEY, fullText);
+      } else {
+        showNotesStatus("Request aborted.");
+      }
+    } else {
+      showNotesStatus("Enhance failed: " + e.message);
+    }
+  } finally {
+    isEnhancingNotes = false;
+  }
+}
+
+function undoNotesEnhancement() {
+  const textarea = document.getElementById("notes-textarea");
+  const original = textarea.dataset.originalText;
+  if (original === undefined) {
+    showNotesStatus("Nothing to undo");
+    return;
+  }
+  textarea.value = original;
+  delete textarea.dataset.originalText;
+  const undoBtn = document.getElementById("undo-notes-btn");
+  if (undoBtn) undoBtn.disabled = true;
+  showNotesStatus("Undo");
+  localStorage.setItem(NOTES_STORAGE_KEY, original);
+}
+
+function copyNotesToClipboard() {
+  const textarea = document.getElementById("notes-textarea");
+  const text = textarea.value.trim();
+  if (!text) {
+    showNotesStatus("Nothing to copy");
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => showNotesStatus("Copied to clipboard"),
+      () => fallbackCopy(text)
+    );
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand("copy");
+    showNotesStatus("Copied to clipboard");
+  } catch (e) {
+    showNotesStatus("Copy failed");
+  } finally {
+    document.body.removeChild(ta);
+  }
+}
+
+function exportNotesAsMarkdown() {
+  const textarea = document.getElementById("notes-textarea");
+  const text = textarea.value.trim();
+  if (!text) {
+    showNotesStatus("Nothing to export");
+    return;
+  }
+  const blob = new Blob([text], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `bible-notes-${new Date().toISOString().slice(0, 10)}.md`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showNotesStatus("Exported");
+}
+
+function openNotesPreview() {
+  const textarea = document.getElementById("notes-textarea");
+  const previewBody = document.getElementById("notes-preview-body");
+  const text = textarea.value.trim();
+  if (!text) {
+    showNotesStatus("Nothing to preview");
+    return;
+  }
+  previewBody.innerHTML = renderMarkdown(text);
+  const modal = document.getElementById("notes-preview-modal");
+  if (modal) modal.classList.add("active");
+}
+
+function closeNotesPreview() {
+  const modal = document.getElementById("notes-preview-modal");
+  if (modal) modal.classList.remove("active");
+}
+
+function initNotesMode() {
+  const notesTab = document.getElementById("mode-notes-tab");
+  const notesTextarea = document.getElementById("notes-textarea");
+  const notesSaveBtn = document.getElementById("notes-save-btn");
+  const notesCopyBtn = document.getElementById("notes-copy-btn");
+  const notesExportBtn = document.getElementById("notes-export-btn");
+  const enhanceBtn = document.getElementById("enhance-notes-btn");
+  const undoBtn = document.getElementById("undo-notes-btn");
+  const previewBtn = document.getElementById("preview-notes-btn");
+  const closePreviewBtn = document.getElementById("close-notes-preview");
+  const previewModal = document.getElementById("notes-preview-modal");
+
+  if (notesTab) notesTab.addEventListener("click", () => switchMode("notes"));
+  if (notesSaveBtn) notesSaveBtn.addEventListener("click", saveNotesText);
+  if (notesCopyBtn) notesCopyBtn.addEventListener("click", copyNotesToClipboard);
+  if (notesExportBtn) notesExportBtn.addEventListener("click", exportNotesAsMarkdown);
+  if (enhanceBtn) enhanceBtn.addEventListener("click", enhanceNotesWithAI);
+  if (undoBtn) undoBtn.addEventListener("click", undoNotesEnhancement);
+  if (previewBtn) previewBtn.addEventListener("click", openNotesPreview);
+  if (closePreviewBtn) closePreviewBtn.addEventListener("click", closeNotesPreview);
+  if (previewModal) {
+    previewModal.querySelector(".notes-preview-overlay").addEventListener("click", closeNotesPreview);
+  }
+
+  // Auto-save on input with debounce
+  let saveTimeout = null;
+  if (notesTextarea) {
+    notesTextarea.addEventListener("input", () => {
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        if (!isEnhancingNotes) {
+          localStorage.setItem(NOTES_STORAGE_KEY, notesTextarea.value);
+          showNotesStatus("Auto-saved");
+        }
+      }, 800);
+    });
+  }
+}
+
+window.copyNotesToClipboard = copyNotesToClipboard;
+window.saveNotesText = saveNotesText;
+window.openNotesPreview = openNotesPreview;
+window.closeNotesPreview = closeNotesPreview;
 
 bootstrap();
