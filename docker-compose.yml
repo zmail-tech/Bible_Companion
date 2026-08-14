@@ -1,8 +1,6 @@
 services:
   bible-companion:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/zmail-tech/bible_companion:latest
     container_name: bible-companion
     ports:
       - "8080:80"
