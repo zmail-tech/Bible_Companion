@@ -71,6 +71,34 @@ python3 -m http.server 8080
 
 Most browsers offer an "Install" button in the address bar. The app installs standalone with offline Bible text available without a network connection.
 
+## Docker
+
+Run the app as a containerized static server — no local dependencies needed beyond Docker.
+
+### Docker Compose (recommended)
+
+```bash
+docker compose up -d
+# Open http://localhost:8080
+```
+
+### Docker (manual)
+
+```bash
+docker build -t bible-companion .
+docker run -d -p 8080:80 --name bible-companion bible-companion
+# Open http://localhost:8080
+```
+
+### Pre-built image
+
+A multi-platform image is automatically built and published to GitHub Container Registry when a release is created:
+
+```bash
+docker pull ghcr.io/zmail-tech/bible_companion:latest
+docker run -d -p 8080:80 ghcr.io/zmail-tech/bible_companion:latest
+```
+
 ## Bible Data
 
 This project uses the Berean Standard Bible (BSB) translated text, which is released under CC0 (Public Domain). The text is enriched with Strong's concordance numbers for original-language word lookups.
