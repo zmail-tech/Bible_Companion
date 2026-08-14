@@ -2,6 +2,20 @@
 
 const STORAGE_KEY = "bibleCompanion_settings";
 const MODELS_STORAGE_KEY = "bibleCompanion_models";
+const EXPORT_KEYS = [
+  "bibleCompanion_settings",
+  "bibleCompanion_models",
+  "bibleCompanion_tabs",
+  "bibleCompanion_activeTabId",
+  "bibleCompanion_nextTabId",
+  "bibleCompanion_prayerTabs",
+  "bibleCompanion_activePrayerTabId",
+  "bibleCompanion_nextPrayerTabId",
+  "bibleCompanion_theme",
+  "bibleCompanion_splitter",
+  "bibleCompanion_notes",
+  "bibleCompanion_reviewState"
+];
 
 const DEFAULT_SETTINGS = {
   providers: [
@@ -268,6 +282,67 @@ function saveSettingsLocally() {
     console.error("[settings] Failed to save settings to localStorage:", e);
   }
 }
+
+/* --- Export / Import --- */
+
+function gatherAllData() {
+  const data = {};
+  for (const key of EXPORT_KEYS) {
+    const val = localStorage.getItem(key);
+    if (val !== null) {
+      data[key] = val;
+    }
+  }
+  return data;
+}
+
+function exportAllData() {
+  const data = gatherAllData();
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  a.href = url;
+  a.download = `bible-companion-backup-${ts}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importAllData(file, statusEl) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (typeof data !== "object" || Array.isArray(data)) {
+          reject(new Error("Invalid backup file format."));
+          return;
+        }
+        const imported = [];
+        for (const key of EXPORT_KEYS) {
+          if (data[key] !== undefined) {
+            let val = data[key];
+            if (typeof val !== "string") {
+              val = JSON.stringify(val);
+            }
+            localStorage.setItem(key, val);
+            imported.push(key);
+          }
+        }
+        resolve(imported);
+      } catch (e) {
+        reject(new Error("Could not parse the backup file: " + e.message));
+      }
+    };
+    reader.onerror = () => reject(new Error("Could not read the file."));
+    reader.readAsText(file);
+  });
+}
+
+export { exportAllData, importAllData };
 
 function normalizeEndpoint(input) {
   if (!input) return input;
@@ -682,6 +757,46 @@ function initSettingsModal() {
     populateModelDropdowns();
     setStatus("Settings reset to defaults.", "success");
   });
+
+  const exportBtn = document.getElementById("export-data-btn");
+  const importBtn = document.getElementById("import-data-btn");
+  const importStatus = document.getElementById("import-status");
+
+  if (exportBtn) {
+    exportBtn.addEventListener("click", () => {
+      exportAllData();
+    });
+  }
+
+  if (importBtn) {
+    importBtn.addEventListener("click", () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".json,application/json";
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        importStatus.textContent = "Importing...";
+        importStatus.className = "status-message";
+        try {
+          const imported = await importAllData(file);
+          if (importStatus) {
+            importStatus.textContent = `Imported ${imported.length} data keys. Reloading...`;
+            importStatus.className = "status-message success";
+          }
+          setTimeout(() => {
+            location.reload();
+          }, 1200);
+        } catch (err) {
+          if (importStatus) {
+            importStatus.textContent = err.message;
+            importStatus.className = "status-message error";
+          }
+        }
+      };
+      input.click();
+    });
+  }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();

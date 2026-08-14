@@ -318,6 +318,24 @@
                  <h3>Disclaimer</h3>
                  <p>This application uses large language models (LLMs) to generate commentary and answers. LLMs can and do make mistakes. Always verify important information against the Bible text itself and trusted sources.</p>
                </div>
+               <div class="settings-section-header">
+                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                 <span>Export / Import Data</span>
+               </div>
+               <div class="form-group">
+                 <p class="form-hint">Export all your settings, providers, prayer lists, and notes to a JSON file. Import that file on another device or session to restore everything.</p>
+                 <div class="export-import-actions">
+                   <button type="button" id="export-data-btn" class="btn-secondary">
+                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                     Export All Data
+                   </button>
+                   <button type="button" id="import-data-btn" class="btn-secondary">
+                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                     Import Data
+                   </button>
+                 </div>
+                 <div id="import-status" class="status-message" style="margin-top: 0.5rem;"></div>
+               </div>
             </section>
 
             <section data-settings-pane="providers" class="settings-pane">
